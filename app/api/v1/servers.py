@@ -139,8 +139,12 @@ async def delete_managed_container(server_id: str, container_name: str):
         raise HTTPException(status_code=502, detail=f"Could not remove managed container: {exc}")
 
 
-@router.post("/{server_id}/containers/postgres", response_model=ContainerCreateResponse, status_code=201, dependencies=[Depends(verify_api_key)])
-async def create_postgres_container(server_id: str, payload: ContainerCreateRequest):
+@router.post("/{server_id}/containers/{engine}", response_model=ContainerCreateResponse, status_code=201, dependencies=[Depends(verify_api_key)])
+async def create_database_container(server_id: str, engine: str, payload: ContainerCreateRequest):
+    if engine not in {"postgres", "mongodb", "mysql", "redis"}:
+        raise HTTPException(status_code=400, detail="Unsupported database engine.")
+    if engine != payload.engine:
+        raise HTTPException(status_code=400, detail="Path engine and payload engine do not match.")
     if payload.server_id != server_id:
         raise HTTPException(status_code=400, detail="Path server_id and payload server_id do not match.")
     server = server_service.get(server_id)
@@ -148,10 +152,10 @@ async def create_postgres_container(server_id: str, payload: ContainerCreateRequ
         raise HTTPException(status_code=404, detail="Server was not found.")
     try:
         created = await asyncio.to_thread(
-            server_service.create_postgres_container, server_id, name=payload.name,
+            server_service.create_database_container, server_id, name=payload.name,
             container_name=payload.container_name,
             database_name=payload.database_name, database_user=payload.database_user,
-            database_password=payload.database_password, host_port=payload.host_port, image=payload.image,
+            database_password=payload.database_password, host_port=payload.host_port, image=payload.image, engine=engine,
         )
         try:
             host = server["host"]
@@ -161,12 +165,15 @@ async def create_postgres_container(server_id: str, payload: ContainerCreateRequ
                     host = f"[{host}]"
             except ValueError:
                 pass
-            connection_url = (
-                f"postgresql://{quote(payload.database_user, safe='')}:{quote(payload.database_password, safe='')}"
-                f"@{host}:{payload.host_port}/{quote(payload.database_name, safe='')}"
-            )
+            user = quote(payload.database_user, safe=''); password = quote(payload.database_password, safe=''); dbname = quote(payload.database_name, safe='')
+            connection_url = {
+                "postgres": f"postgresql://{user}:{password}@{host}:{payload.host_port}/{dbname}",
+                "mongodb": f"mongodb://{user}:{password}@{host}:{payload.host_port}/{dbname}?authSource=admin",
+                "mysql": f"mysql://{user}:{password}@{host}:{payload.host_port}/{dbname}",
+                "redis": f"redis://:{password}@{host}:{payload.host_port}/0",
+            }[engine]
             registered = await database_registry.add_database(
-                name=payload.name, engine="postgres", connection_url=connection_url, verify=True,
+                name=payload.name, engine=engine, connection_url=connection_url, verify=True,
                 server_id=server_id, container_id=created["container_name"], read_only_verified=False,
             )
         except Exception:
@@ -180,7 +187,7 @@ async def create_postgres_container(server_id: str, payload: ContainerCreateRequ
             "connection_url": registered.connection_url,
             "data_directory": created["data_directory"],
             "status": registered.status,
-            "message": "A new isolated PostgreSQL container was created. Existing server containers and databases were not touched.",
+            "message": f"A new isolated {engine} container was created. Existing server containers and databases were not touched.",
         }
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -190,9 +197,13 @@ async def create_postgres_container(server_id: str, payload: ContainerCreateRequ
         raise HTTPException(status_code=502, detail=f"Container provisioning failed: {exc}")
 
 
-@router.post("/{server_id}/containers/postgres/stream", dependencies=[Depends(verify_api_key)])
-async def create_postgres_container_stream(server_id: str, payload: ContainerCreateRequest):
-    """Provision a PostgreSQL container and stream remote Docker output as SSE."""
+@router.post("/{server_id}/containers/{engine}/stream", dependencies=[Depends(verify_api_key)])
+async def create_database_container_stream(server_id: str, engine: str, payload: ContainerCreateRequest):
+    """Provision a database container and stream remote Docker output as SSE."""
+    if engine not in {"postgres", "mongodb", "mysql", "redis"}:
+        raise HTTPException(status_code=400, detail="Unsupported database engine.")
+    if engine != payload.engine:
+        raise HTTPException(status_code=400, detail="Path engine and payload engine do not match.")
     if payload.server_id != server_id:
         raise HTTPException(status_code=400, detail="Path server_id and payload server_id do not match.")
     server = server_service.get(server_id)
@@ -208,10 +219,10 @@ async def create_postgres_container_stream(server_id: str, payload: ContainerCre
 
         async def provision():
             return await asyncio.to_thread(
-                server_service.create_postgres_container, server_id,
+                server_service.create_database_container, server_id,
                 name=payload.name, container_name=payload.container_name, database_name=payload.database_name,
                 database_user=payload.database_user, database_password=payload.database_password,
-                host_port=payload.host_port, image=payload.image, progress=report,
+                host_port=payload.host_port, image=payload.image, progress=report, engine=engine,
             )
 
         task = asyncio.create_task(provision())
@@ -233,12 +244,15 @@ async def create_postgres_container_stream(server_id: str, payload: ContainerCre
                     host = f"[{host}]"
             except ValueError:
                 pass
-            connection_url = (
-                f"postgresql://{quote(payload.database_user, safe='')}:{quote(payload.database_password, safe='')}"
-                f"@{host}:{payload.host_port}/{quote(payload.database_name, safe='')}"
-            )
+            user = quote(payload.database_user, safe=''); password = quote(payload.database_password, safe=''); dbname = quote(payload.database_name, safe='')
+            connection_url = {
+                "postgres": f"postgresql://{user}:{password}@{host}:{payload.host_port}/{dbname}",
+                "mongodb": f"mongodb://{user}:{password}@{host}:{payload.host_port}/{dbname}?authSource=admin",
+                "mysql": f"mysql://{user}:{password}@{host}:{payload.host_port}/{dbname}",
+                "redis": f"redis://:{password}@{host}:{payload.host_port}/0",
+            }[engine]
             registered = await database_registry.add_database(
-                name=payload.name, engine="postgres", connection_url=connection_url, verify=True,
+                name=payload.name, engine=engine, connection_url=connection_url, verify=True,
                 server_id=server_id, container_id=created["container_name"], read_only_verified=False,
             )
             result = {
@@ -246,7 +260,7 @@ async def create_postgres_container_stream(server_id: str, payload: ContainerCre
                 "container_name": created["container_name"], "database_name": payload.database_name,
                 "connection_url": registered.connection_url, "data_directory": created["data_directory"],
                 "status": registered.status,
-                "message": "A new isolated PostgreSQL container was created. Existing server containers and databases were not touched.",
+                "message": f"A new isolated {engine} container was created. Existing server containers and databases were not touched.",
             }
             yield f"data: {json.dumps({'type': 'complete', 'result': result})}\n\n"
         except Exception as exc:

@@ -349,7 +349,7 @@
       </section>
 
       <section class="section reveal" id="remoteServers">
-        <div class="section-header"><div><h2 class="section-title">Database Servers</h2><p class="section-subtitle">Provision new PostgreSQL containers under dedicated paths and copy snapshots to server-specific folders.</p></div><button class="btn btn-secondary btn-sm" data-action="open-server-dialog" type="button">Add Server</button></div>
+        <div class="section-header"><div><h2 class="section-title">Database Servers</h2><p class="section-subtitle">Provision isolated PostgreSQL, MongoDB, MySQL/MariaDB, and Redis containers under dedicated paths.</p></div><button class="btn btn-secondary btn-sm" data-action="open-server-dialog" type="button">Add Server</button></div>
         <div class="server-operations-layout">
           <div id="serverCards" class="server-grid"><div class="table-loading">Loading registered servers?</div></div>
           <aside class="server-live-console" id="serverLiveConsole" aria-live="polite" aria-label="Live server provisioning output" hidden>
@@ -758,16 +758,17 @@
   </div></dialog>
 
   <dialog id="provisionDbDialog" closedby="any" aria-labelledby="provisionDbTitle"><div class="dialog-content">
-    <div class="dialog-head"><div><h3 id="provisionDbTitle" class="dialog-title">Create Isolated PostgreSQL Container</h3><p id="provisionServerLabel" class="dialog-subtitle">New container and new data directory only. Existing containers are not changed.</p></div></div>
+    <div class="dialog-head"><div><h3 id="provisionDbTitle" class="dialog-title">Create Isolated Database Container</h3><p id="provisionServerLabel" class="dialog-subtitle">New container and new data directory only. Existing containers are not changed.</p></div></div>
     <div class="form-grid">
+      <div class="form-group"><label for="provisionEngine">Database engine</label><select id="provisionEngine" class="form-control"><option value="postgres">PostgreSQL</option><option value="mongodb">MongoDB</option><option value="mysql">MySQL / MariaDB</option><option value="redis">Redis</option></select></div>
       <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>
       <div class="form-group"><label for="provisionContainerName">Docker container name</label><input id="provisionContainerName" class="form-control mono" value="dbops-postgres" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" required><small class="field-hint">Letters, numbers, dots, underscores, and hyphens; must be unique on this server.</small></div>
       <div class="form-group"><label for="provisionDbName">Database name</label><input id="provisionDbName" class="form-control mono" value="appdb"></div>
       <div class="form-group"><label for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"></div>
       <div class="form-group"><label for="provisionDbPassword">Database password (16+ characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"></div>
       <div class="form-group"><label for="provisionPort">Server port</label><input id="provisionPort" class="form-control" type="number" value="55432" min="1024" max="65535"></div>
-      <div class="form-group"><label for="provisionImage">PostgreSQL image</label><input id="provisionImage" class="form-control mono" value="postgres:16-alpine" pattern="postgres:(1[4-9]|[2-9][0-9])(-alpine)?"><small class="field-hint">If the image is not on the server, DBOps downloads it from Docker Hub before creating the container.</small></div>
-      <div class="form-group form-grid-full"><label for="provisionImageArchive">Load image from archive (for servers without Docker Hub access)</label><div class="server-inline-form"><input id="provisionImageArchive" class="form-control" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"><button class="btn btn-secondary btn-sm" type="button" data-action="upload-postgres-image">Upload and load image</button></div><small class="field-hint">Create a matching archive with <code>docker pull postgres:16-alpine</code> then <code>docker save -o postgres-16-alpine.tar postgres:16-alpine</code> on a machine with Docker access.</small></div>
+      <div class="form-group"><label for="provisionImage">Container image</label><input id="provisionImage" class="form-control mono" value="postgres:16-alpine"><small class="field-hint">Supported image tags: postgres:16-alpine, mongo:7, mysql:8, mariadb:11.4, redis:7-alpine.</small></div>
+      <div class="form-group form-grid-full"><label for="provisionImageArchive">Load PostgreSQL image from archive (optional)</label><div class="server-inline-form"><input id="provisionImageArchive" class="form-control" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"><button class="btn btn-secondary btn-sm" type="button" data-action="upload-postgres-image">Upload PostgreSQL image</button></div></div>
     </div>
     <small class="field-hint">After creation, the new database is selected under Targets. Click its masked connection URL in the Console toolbar to copy the full URL. The server port must be reachable by teammates who connect from outside this application.</small>
     <div class="dialog-actions"><div class="dialog-actions-right"><button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="provisionDbDialog">Cancel</button><button type="button" class="btn btn-primary-gradient" data-action="provision-postgres">Create New Container</button></div></div>

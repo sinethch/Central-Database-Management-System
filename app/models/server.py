@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -59,13 +59,14 @@ class ServerHealthResponse(BaseModel):
 
 class ContainerCreateRequest(BaseModel):
     server_id: str
+    engine: Literal["postgres", "mongodb", "mysql", "redis"] = "postgres"
     name: str = Field(..., min_length=1, max_length=63, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
     container_name: str = Field(..., min_length=1, max_length=63, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-    database_name: str = Field(..., min_length=1, max_length=63, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    database_name: str = Field(default="appdb", min_length=1, max_length=63, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     database_user: str = Field(default="dbops", min_length=1, max_length=63, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     database_password: str = Field(..., min_length=16, max_length=128)
     host_port: int = Field(default=5432, ge=1024, le=65535)
-    image: str = Field(default="postgres:16-alpine", pattern=r"^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$")
+    image: Optional[str] = Field(default=None, max_length=160, pattern=r"^[A-Za-z0-9._/:@-]+$")
 
 
 class ContainerCreateResponse(BaseModel):

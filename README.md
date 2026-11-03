@@ -30,7 +30,7 @@ DBOps brings common operational workflows into one self-hosted dashboard and API
 - **One operations dashboard** for registered database targets, health, metrics, activity, and alerts.
 - **Four engine integrations** for PostgreSQL, MongoDB, MySQL/MariaDB, and Redis, with engine-specific monitoring coverage.
 - **PostgreSQL backup and recovery** with scheduled snapshots, retention, archive verification, and restore into a new database.
-- **Storage options** for mounted repositories and verified copies to registered remote Linux servers.
+- **Storage options** for mounted repositories and verified copies to registered remote Linux servers, which can also host newly provisioned PostgreSQL, MongoDB, MySQL/MariaDB, and Redis containers.
 - **Operational controls** for latency checks and explicit query termination, with documented impact.
 - **Self-hosted deployment** using Docker Compose or a local Python environment.
 

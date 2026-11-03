@@ -282,13 +282,32 @@ class ServerService:
         self._save(rows)
         return self.public(draft)
 
-    def create_postgres_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: str, progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    def create_database_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: Optional[str], progress: Optional[Callable[[str], None]] = None, engine: str = "postgres") -> Dict[str, Any]:
+        """Provision an isolated database container with fresh data and a protected password file."""
+        configs = {
+            "postgres": (image or "postgres:16-alpine", "/var/lib/postgresql/data", "postgres_password", 5432),
+            "mongodb": (image or "mongo:7", "/data/db", "mongo_password", 27017),
+            "mysql": (image or "mysql:8", "/var/lib/mysql", "mysql_password", 3306),
+            "redis": (image or "redis:7-alpine", "/data", "redis_password", 6379),
+        }
+        patterns = {
+            "postgres": r"postgres:(1[4-9]|[2-9][0-9])(-alpine)?",
+            "mongodb": r"mongo:(6|7|8)(\.\d+)?(-[a-z0-9.-]+)?",
+            "mysql": r"(mysql:8(\.\d+)?|mariadb:10\.\d+|mariadb:11\.\d+)(-[a-z0-9.-]+)?",
+            "redis": r"redis:([7-9]|[1-9][0-9])(\.\d+)?(-[a-z0-9.-]+)?",
+        }
+        import re
+        if engine not in configs:
+            raise ValueError("Choose PostgreSQL, MongoDB, MySQL/MariaDB, or Redis.")
+        image, target_dir, secret_name, internal_port = configs[engine]
+        if not re.fullmatch(patterns[engine], image):
+            raise ValueError(f"Unsupported {engine} image tag: {image}")
         row = self.get(server_id)
         if not row:
             raise FileNotFoundError("Server was not found.")
         client = self.connect(row)
         data_dir = posixpath.join(row["database_root"], container_name)
-        secret_file = posixpath.join(row["database_root"], ".secrets", container_name, "postgres_password")
+        secret_file = posixpath.join(row["database_root"], ".secrets", container_name, secret_name)
         bind_host = f"[{row['host']}]" if ":" in row["host"] else row["host"]
         report = progress or (lambda _message: None)
         try:
@@ -297,79 +316,64 @@ class ServerService:
                 self._exec(client, ["docker", "image", "inspect", image], timeout=20)
                 report(f"Image {image} is already available locally")
             except RuntimeError as exc:
-                detail = str(exc)
-                lower_detail = detail.lower()
-                if any(marker in lower_detail for marker in ("no such image", "not found", "manifest unknown")):
-                    try:
-                        report(f"Image {image} is missing; pulling from Docker Hub")
-                        self._exec_with_progress(client, ["docker", "pull", image], report, timeout=600)
-                        report(f"Image pull completed: {image}")
-                    except RuntimeError as pull_exc:
-                        raise RuntimeError(f"Could not download PostgreSQL image '{image}' from Docker Hub: {pull_exc}. Check the remote server's internet access, DNS, firewall, or Docker proxy settings. No container or data directory was created.") from pull_exc
-                    self._exec(client, ["docker", "image", "inspect", image], timeout=20)
-                else:
-                    raise RuntimeError(f"Could not check PostgreSQL image '{image}' on the remote server: {detail}") from exc
-            # Create only the configured roots (if missing) and new descendants within them.
-            report("Preparing a new data directory and protected password file")
+                detail = str(exc).lower()
+                if not any(marker in detail for marker in ("no such image", "not found", "manifest unknown")):
+                    raise RuntimeError(f"Could not check image '{image}' on the remote server: {exc}") from exc
+                report(f"Image {image} is missing; pulling from Docker Hub")
+                self._exec_with_progress(client, ["docker", "pull", image], report, timeout=600)
+            report("Preparing an isolated data directory and protected password file")
             sftp = client.open_sftp()
             try:
-                # A container may have been deleted directly on the host while its
-                # database directory remains. Never reuse or modify that old data.
-                # Allocate a fresh sibling path when either managed path collides.
-                base_data_dir = data_dir
-                base_secret_file = secret_file
-                for _attempt in range(100):
-                    try:
-                        sftp.lstat(data_dir)
-                        data_exists = True
-                    except OSError:
-                        data_exists = False
-                    try:
-                        sftp.lstat(secret_file)
-                        secret_exists = True
-                    except OSError:
-                        secret_exists = False
-                    if not data_exists and not secret_exists:
-                        break
+                base_data = data_dir
+                for _ in range(100):
+                    try: sftp.lstat(data_dir); data_exists = True
+                    except OSError: data_exists = False
+                    try: sftp.lstat(secret_file); secret_exists = True
+                    except OSError: secret_exists = False
+                    if not data_exists and not secret_exists: break
                     suffix = uuid.uuid4().hex[:8]
-                    data_dir = f"{base_data_dir}-{suffix}"
-                    secret_file = posixpath.join(row["database_root"], ".secrets", f"{container_name}-{suffix}", "postgres_password")
+                    data_dir = f"{base_data}-{suffix}"
+                    secret_file = posixpath.join(row["database_root"], ".secrets", f"{container_name}-{suffix}", secret_name)
                 else:
                     raise RuntimeError("Could not allocate a unique remote data path after 100 attempts.")
-                if data_dir != base_data_dir:
-                    report(f"The original data path already exists; using a fresh path: {data_dir}")
                 self._create_new_directory(sftp, data_dir, row["database_root"])
                 self._mkdirs(sftp, posixpath.dirname(secret_file), row["database_root"])
-                # Paramiko requires the write flag as well as exclusive-create;
-                # "x" alone opens the remote file without write access.
                 with sftp.open(secret_file, "wx") as password_file:
                     password_file.write(database_password.encode("utf-8"))
                 sftp.chmod(secret_file, 0o600)
             finally:
                 sftp.close()
-            report(f"Starting container {container_name}")
-            self._exec_with_progress(client, [
-                "docker", "run", "-d", "--name", container_name,
+            args = ["docker", "run", "-d", "--name", container_name,
                 "--label", "com.dbops.managed=true", "--label", f"com.dbops.name={name}",
-                "--restart", "unless-stopped", "--mount", f"type=bind,source={data_dir},target=/var/lib/postgresql/data",
+                "--label", f"com.dbops.engine={engine}", "--restart", "unless-stopped",
+                "--mount", f"type=bind,source={data_dir},target={target_dir}",
                 "--mount", f"type=bind,source={secret_file},target=/run/secrets/dbops_password,readonly",
-                "--publish", f"{bind_host}:{host_port}:5432", "--env", "POSTGRES_DB=" + database_name,
-                "--env", "POSTGRES_USER=" + database_user, "--env", "POSTGRES_PASSWORD_FILE=/run/secrets/dbops_password",
-                image,
-            ], report, timeout=600)
-            report("Container started; waiting for PostgreSQL readiness")
-            ready = False
-            for _attempt in range(30):
+                "--publish", f"{bind_host}:{host_port}:{internal_port}"]
+            if engine == "postgres":
+                args += ["--env", "POSTGRES_DB="+database_name, "--env", "POSTGRES_USER="+database_user, "--env", "POSTGRES_PASSWORD_FILE=/run/secrets/dbops_password"]
+                ready = ["pg_isready", "-U", database_user, "-d", database_name]
+            elif engine == "mongodb":
+                args += ["--env", "MONGO_INITDB_ROOT_USERNAME="+database_user, "--env", "MONGO_INITDB_ROOT_PASSWORD_FILE=/run/secrets/dbops_password", "--env", "MONGO_INITDB_DATABASE="+database_name]
+                ready = ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            elif engine == "mysql":
+                args += ["--env", "MYSQL_DATABASE="+database_name, "--env", "MYSQL_USER="+database_user, "--env", "MYSQL_PASSWORD_FILE=/run/secrets/dbops_password", "--env", "MYSQL_ROOT_PASSWORD_FILE=/run/secrets/dbops_password"]
+                ready = ["mysqladmin", "ping", "-h", "127.0.0.1"]
+            else:
+                args += ["--entrypoint", "sh", image, "-c", "exec redis-server --appendonly yes --requirepass \"$(cat /run/secrets/dbops_password)\""]
+                ready = ["sh", "-c", "REDISCLI_AUTH=\"$(cat /run/secrets/dbops_password)\" redis-cli ping"]
+            if engine != "redis":
+                args.append(image)
+            report(f"Starting {engine} container {container_name}")
+            self._exec_with_progress(client, args, report, timeout=600)
+            report(f"Waiting for {engine} readiness")
+            for _ in range(45):
                 try:
-                    self._exec(client, ["docker", "exec", container_name, "pg_isready", "-U", database_user, "-d", database_name], timeout=8)
-                    ready = True
-                    report("PostgreSQL is ready")
-                    break
+                    self._exec(client, ["docker", "exec", container_name, *ready], timeout=8)
+                    report(f"{engine} is ready")
+                    return {"container_name": container_name, "data_directory": data_dir, "status": "running", "engine": engine}
                 except RuntimeError:
                     time.sleep(2)
-            if not ready:
-                raise RuntimeError("The new container was created but PostgreSQL did not become ready. The new container and its dedicated files were left in place for inspection.")
-            return {"container_name": container_name, "data_directory": data_dir, "status": "running"}
+            raise RuntimeError(f"The new {engine} container was created but did not become ready. Its isolated files were left in place for inspection.")
         finally:
             client.close()
 

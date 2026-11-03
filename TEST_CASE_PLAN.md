@@ -6,7 +6,7 @@ This plan covers manual end-to-end and regression testing of the current DBOps C
 
 - Authentication, optional MFA, and access roles
 - Database targets and dashboard monitoring
-- Remote server registration, health checks, and isolated PostgreSQL container provisioning
+- Remote server registration, health checks, and isolated PostgreSQL, MongoDB, MySQL/MariaDB, and Redis container provisioning
 - Manual PostgreSQL snapshots and remote copies
 - Backup schedule configuration and execution
 - Backups list, download, verification, and deletion
@@ -22,7 +22,7 @@ This is a **test plan**, not evidence that the cases have already been executed.
 1. Run destructive or operational cases only against a dedicated QA deployment, disposable PostgreSQL databases, and a remote QA server. Never use production databases, production hosts, or production backup paths.
 2. Take and verify a known-good snapshot of the QA fixture before testing restore, retention, or deletion.
 3. Existing-database restore writes to the selected database. Run it only against a disposable target created for this test run. Never point it at the source fixture or any shared database.
-4. Container provisioning creates a new remote PostgreSQL container, data directory, and registered database target. Confirm the selected server and an unused host port before submitting. Do not use an existing container name, port, or data directory.
+4. Container provisioning creates a new remote database container, data directory, and registered database target. Confirm the selected engine, server, and an unused host port before submitting. Do not use an existing container name, port, or data directory.
 5. Backup deletion removes the app's local archive and list entry. Test only on a disposable test snapshot after confirming remote/repository copies are not being relied on.
 6. Use test-only Telegram bot/chat credentials if testing live delivery. Never include credentials, full connection URLs, MFA seeds, or unredacted logs in evidence.
 7. Do not bypass SSH host-key checks. Confirm the QA server host key out-of-band and use the configured trusted `known_hosts` file.
@@ -257,7 +257,7 @@ Copy this table into the execution record and fill in the result and evidence fo
 - Command search returns relevant actions/targets and the selected command works.
 - Theme choice changes appearance without losing the current session.
 
-### C. Remote server and PostgreSQL container
+### C. Remote server and database containers
 
 #### SERVER-01 — Register a verified QA remote server
 
@@ -303,14 +303,14 @@ Copy this table into the execution record and fill in the result and evidence fo
 - An unreachable host is reported as unavailable/error, not healthy.
 - Restoring connectivity permits a later successful health check.
 
-#### SERVER-04 — Provision a new isolated PostgreSQL container
+#### SERVER-04 — Provision a new isolated database container
 
 **Priority:** P1 · **Type:** Provisioning / isolated QA only
 
 **Preconditions:** SERVER-01 passed; QA server selected; unique container/database labels and data path; unused port; strong test-only database password; the user has authorization to create a container.
 
 **Steps**
-1. Select **Create PostgreSQL Container** on the QA server.
+1. Select **Create Database Container** on the QA server and choose an engine.
 2. Enter the QA display label, database name, database user, test-only password, and confirmed unused host port.
 3. Review the server and resource details, then create the container.
 4. Wait for completion and inspect the server card and Targets list.
@@ -318,7 +318,7 @@ Copy this table into the execution record and fill in the result and evidence fo
 6. Confirm pre-existing QA containers and databases were not changed.
 
 **Expected**
-- A new isolated container and new data directory are created under the configured QA root.
+- A new isolated container and new data directory are created under the configured QA root for the selected engine.
 - The new PostgreSQL database is registered/selectable in Targets.
 - The connection succeeds with the supplied test credentials.
 - Existing server containers/databases are untouched.

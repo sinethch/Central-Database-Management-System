@@ -3063,7 +3063,7 @@ function serverHealthActions(serverId) {
   const safeId = escapeHtml(serverId);
   return `<div class="server-health-actions">
     <button class="btn btn-secondary btn-sm" data-action="refresh-server-health" data-id="${safeId}" type="button">Refresh Health</button>
-    <button class="btn btn-secondary btn-sm" data-action="open-provision-db" data-id="${safeId}" type="button">Create PostgreSQL Container</button>
+    <button class="btn btn-secondary btn-sm" data-action="open-provision-db" data-id="${safeId}" type="button">Create Database Container</button>
     <button class="btn btn-sm btn-danger-ghost" data-action="remove-server-registration" data-id="${safeId}" type="button">Remove Server</button>
   </div>`;
 }
@@ -3219,19 +3219,33 @@ function openProvisionDbDialog(serverId) {
   const server = state.remoteServers.find((item) => item.id === serverId);
   if (!server) return;
   state.provisionServerId = serverId;
+  const engineSelect = document.getElementById("provisionEngine");
+  const engineDefaults = { postgres: ["postgres:16-alpine", 55432, "dbops-postgres"], mongodb: ["mongo:7", 57017, "dbops-mongodb"], mysql: ["mysql:8", 53306, "dbops-mysql"], redis: ["redis:7-alpine", 56379, "dbops-redis"] };
+  const updateEngine = () => {
+    const [image, port, container] = engineDefaults[engineSelect.value] || engineDefaults.postgres;
+    document.getElementById("provisionImage").value = image;
+    document.getElementById("provisionPort").value = port;
+    document.getElementById("provisionContainerName").value = container;
+    document.getElementById("provisionDbTitle").textContent = `Create Isolated ${engineSelect.selectedOptions[0].text} Container`;
+    document.getElementById("provisionImageArchive").closest(".form-group").hidden = engineSelect.value !== "postgres";
+  };
+  engineSelect.onchange = updateEngine;
+  updateEngine();
   document.getElementById("provisionServerLabel").textContent = `${server.name} (${maskedSshAddress(server)}) · creates a new container and data directory only`;
   openDialog("provisionDbDialog");
 }
 
 async function provisionPostgresContainer() {
+  const engine = document.getElementById("provisionEngine").value;
   const name = document.getElementById("provisionName").value.trim();
   const containerName = document.getElementById("provisionContainerName").value.trim();
   const databaseName = document.getElementById("provisionDbName").value.trim();
   const databaseUser = document.getElementById("provisionDbUser").value.trim();
   const databasePassword = document.getElementById("provisionDbPassword").value;
   const image = document.getElementById("provisionImage").value.trim();
-  if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser) || databasePassword.length < 16 || !/^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/.test(image)) {
-    showToast("Provide a label, valid unique Docker container name, valid database/user names, a PostgreSQL image tag (for example postgres:16-alpine), and a database password of at least 16 characters.", "warning"); return;
+  const imagePatterns = { postgres: /^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/, mongodb: /^mongo:(6|7|8)(\.\d+)?(-[a-z0-9.-]+)?$/, mysql: /^(mysql:8(\.\d+)?|mariadb:10\.\d+|mariadb:11\.\d+)(-[a-z0-9.-]+)?$/, redis: /^redis:([7-9]|[1-9][0-9])(\.\d+)?(-[a-z0-9.-]+)?$/ };
+  if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser) || databasePassword.length < 16 || !imagePatterns[engine]?.test(image)) {
+    showToast("Provide valid names, a supported image for the selected engine, and a database password of at least 16 characters.", "warning"); return;
   }
   const btn = document.querySelector('[data-action="provision-postgres"]');
   setBusy(btn, true, "Creating container…");
@@ -3239,9 +3253,9 @@ async function provisionPostgresContainer() {
     clearServerOperationOutput();
     setServerOperationStatus("Connecting", "badge-info");
     appendServerOperationLine(`Starting provision for ${name} using ${image}`, "info");
-    const response = await fetch(`/api/v1/servers/${encodeURIComponent(state.provisionServerId)}/containers/postgres/stream`, {
+    const response = await fetch(`/api/v1/servers/${encodeURIComponent(state.provisionServerId)}/containers/${engine}/stream`, {
       method: "POST", headers: getHeaders(), body: JSON.stringify({
-      server_id: state.provisionServerId, name, container_name: containerName, database_name: databaseName, database_user: databaseUser,
+      server_id: state.provisionServerId, engine, name, container_name: containerName, database_name: databaseName, database_user: databaseUser,
       database_password: databasePassword, host_port: Number(document.getElementById("provisionPort").value), image,
       }),
     });
