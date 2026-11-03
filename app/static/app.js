@@ -3247,7 +3247,7 @@ async function provisionPostgresContainer() {
   if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser) || databasePassword.length < 16 || !imagePatterns[engine]?.test(image)) {
     showToast("Provide valid names, a supported image for the selected engine, and a database password of at least 16 characters.", "warning"); return;
   }
-  const btn = document.querySelector('[data-action="provision-postgres"]');
+  const btn = document.querySelector('[data-action="provision-database"]');
   setBusy(btn, true, "Creating container…");
   try {
     clearServerOperationOutput();
@@ -3718,7 +3718,7 @@ function handleAction(action, el) {
     case "edit-server-paths": editServerPaths(el.dataset.id); break;
     case "delete-managed-container": deleteManagedContainer(el.dataset.id, el.dataset.container); break;
     case "open-provision-db": openProvisionDbDialog(el.dataset.id); break;
-    case "provision-postgres": provisionPostgresContainer(); break;
+    case "provision-database": provisionPostgresContainer(); break;
     case "clear-server-output": clearServerOperationOutput(); break;
     case "close-server-output": closeServerOperationOutput(); break;
     case "upload-postgres-image": uploadPostgresImageArchive(); break;
