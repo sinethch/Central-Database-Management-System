@@ -1,0 +1,109 @@
+services:
+  # ============================================================================
+  # Standalone DBOps Control Plane
+  # ============================================================================
+  dbops-control-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dbops-control-plane
+    restart: unless-stopped
+    ports:
+      - "${MANAGEMENT_PORT:-8080}:8080"
+    environment:
+      - TARGET_DATABASE_URL=${TARGET_DATABASE_URL:-postgresql://postgres:postgres@target-postgres-demo:5432/demo_db}
+      - MANAGEMENT_PORT=8080
+      - API_KEY=${API_KEY:-dbops-control-plane-api-key}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-Admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-AdminBackup}
+      - BACKUP_SCHEDULE=${BACKUP_SCHEDULE:-0 2 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      - BACKUP_STORAGE_DIR=/var/backups
+      - BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY:-dbops-control-plane-default-key-32b!}
+      - DATABASE_CREDENTIAL_ENCRYPTION_KEY=${DATABASE_CREDENTIAL_ENCRYPTION_KEY:-}
+      - AUTH_TOTP_ENCRYPTION_KEY=${AUTH_TOTP_ENCRYPTION_KEY:-}
+      - SERVER_CREDENTIAL_ENCRYPTION_KEY=${SERVER_CREDENTIAL_ENCRYPTION_KEY:-}
+      - SSH_KNOWN_HOSTS_PATH=/run/dbops/known_hosts
+      - SLOW_QUERY_THRESHOLD_SECONDS=${SLOW_QUERY_THRESHOLD_SECONDS:-5}
+      - MAX_CONNECTION_WARNING_PERCENT=${MAX_CONNECTION_WARNING_PERCENT:-80}
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_TELEGRAM_BOT_TOKEN=${ALERT_TELEGRAM_BOT_TOKEN:-}
+      - ALERT_TELEGRAM_CHAT_ID=${ALERT_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - backups_storage:/var/backups
+      - type: bind
+        source: ${SSH_KNOWN_HOSTS_PATH:-./ssh/known_hosts}
+        target: /run/dbops/known_hosts
+        read_only: true
+      # Dev convenience: serve static assets straight from the working tree so
+      # front-end edits appear on refresh without rebuilding the image.
+      - ./app/static:/app/app/static:ro
+    depends_on:
+      target-postgres-demo:
+        condition: service_healthy
+    networks:
+      - dbops-network
+
+  # ============================================================================
+  # Second isolated PostgreSQL target for backup and recovery drills
+  # ============================================================================
+  target-postgres-qa-2:
+    image: postgres:16-alpine
+    container_name: dbops-qa-postgres-2
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=qa2_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${QA2_POSTGRES_PASSWORD:-qa2-local-only-change-this}
+    ports:
+      - "5433:5432"
+    volumes:
+      - qa2_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_readonly_user.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./scripts/seed_demo_db.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d qa2_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dbops-network
+
+  # ============================================================================
+  # Target PostgreSQL Database (Demo / Sandbox)
+  # Pre-seeded with sample user tables and readonly user permissions
+  # ============================================================================
+  target-postgres-demo:
+    image: postgres:16-alpine
+    container_name: target-postgres-demo
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=demo_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_readonly_user.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./scripts/seed_demo_db.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d demo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dbops-network
+
+volumes:
+  backups_storage:
+    name: dbops_backups_storage
+  postgres_data:
+    name: dbops_demo_pgdata
+  qa2_postgres_data:
+    name: dbops_qa2_pgdata
+
+networks:
+  dbops-network:
+    driver: bridge
+

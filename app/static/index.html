@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DBOps Control Plane - multi-database operations, health & backups">
+  <meta name="theme-color" content="#0a0c11">
+  <title>DBOps Control Plane - Multi-Database Operations & Health</title>
+
+  <!-- Set the theme before first paint so there is no flash of the wrong mode -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("dbops_theme");
+        if (t !== "light" && t !== "dark") t = "dark";
+        document.documentElement.dataset.theme = t;
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", t === "light" ? "#f1f4f8" : "#0a0c11");
+      } catch (e) {
+        document.documentElement.dataset.theme = "dark";
+      }
+      try {
+        var authed = localStorage.getItem("dbops_auth_token");
+        document.documentElement.dataset.auth = authed ? "in" : "locked";
+      } catch (e) {
+        document.documentElement.dataset.auth = "locked";
+      }
+    })();
+  </script>
+
+  <!-- Fonts are loaded non-blocking so a slow/blocked CDN can never delay the app -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" media="print" onload="this.media='all'"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+
+  <link rel="stylesheet" href="/static/style.css?v=73">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><path d='M12 2C6.48 2 2 4.02 2 6.5v11C2 19.98 6.48 22 12 22s10-2.02 10-4.5v-11C22 4.02 17.52 2 12 2zm0 2c4.42 0 8 1.57 8 2.5S16.42 9 12 9s-8-1.57-8-2.5S7.58 4 12 4zm0 16c-4.42 0-8-1.57-8-2.5v-2.31c2.14 1.15 5.04 1.81 8 1.81s5.86-.66 8-1.81v2.31c0 .93-3.58 2.5-8 2.5zm0-5c-4.42 0-8-1.57-8-2.5v-2.31c2.14 1.15 5.04 1.81 8 1.81s5.86-.66 8-1.81v2.31c0 .93-3.58 2.5-8 2.5z'/></svg>">
+</head>
+<body>
+  <!-- Icon sprite -->
+  <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 12l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/></symbol>
+      <symbol id="i-snapshot" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+      <symbol id="i-restore" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></symbol>
+      <symbol id="i-storage" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24"><polyline points="3 12 7 12 10 4 14 20 17 12 21 12"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8"/><path d="m17 6 2 2"/><path d="m19 4 2 2"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 4.5L20 16"/><path d="M20 20v-4h-4"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M9 6V4h6v2"/><path d="M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14"/><path d="M10 11v6M14 11v6"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+      <symbol id="i-warning" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 6"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4"/><path d="M3 8h13"/><path d="M17 20l4-4-4-4"/><path d="M21 16H8"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17.4 17.4 0 0 1-3.2 4"/><path d="M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a10.4 10.4 0 0 0 4.2-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l12-7-12-7Z"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="aurora" aria-hidden="true">
+    <span class="aurora-blob aurora-blob-1"></span>
+    <span class="aurora-blob aurora-blob-2"></span>
+    <span class="aurora-blob aurora-blob-3"></span>
+  </div>
+
+  <!-- Animated background scene: constellation field + pointer spotlight -->
+  <canvas id="bgCanvas" class="bg-canvas" aria-hidden="true"></canvas>
+  <div class="bg-vignette" aria-hidden="true"></div>
+
+  <div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
+
+  <!-- Auth gate: immersive 3D story-driven login -->
+  <div class="auth-gate" id="authGate">
+    <div class="auth-aurora-bg" aria-hidden="true">
+      <span class="aurora-blob aurora-blob-1"></span>
+      <span class="aurora-blob aurora-blob-2"></span>
+      <span class="aurora-blob aurora-blob-3"></span>
+    </div>
+    <canvas id="authBgCanvas" class="auth-bg-canvas" aria-hidden="true"></canvas>
+    <div class="auth-vignette" aria-hidden="true"></div>
+    <div class="auth-noise" aria-hidden="true"></div>
+
+    <div class="auth-interface" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <div class="auth-side-wordmark-wrap" aria-hidden="true">
+        <div class="hero-wordmark auth-hero-wordmark">DBOps</div>
+      </div>
+      <div class="auth-frame">
+        <div class="auth-frame-corner auth-frame-corner-tl"></div>
+        <div class="auth-frame-corner auth-frame-corner-tr"></div>
+        <div class="auth-frame-corner auth-frame-corner-bl"></div>
+        <div class="auth-frame-corner auth-frame-corner-br"></div>
+        <div class="auth-frame-scan" aria-hidden="true"></div>
+
+        <div class="auth-card auth-card-3d" id="authCard3d">
+          <div class="auth-card-inner">
+            <div class="auth-brand">
+              <div class="auth-mark auth-mark-3d" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 7a8 3 0 1 0 16 0A8 3 0 1 0 4 7"/>
+                  <path d="M4 7v10a8 3 0 0 0 16 0V7"/>
+                  <path d="M4 12a8 3 0 0 0 16 0"/>
+                  <circle cx="12" cy="12" r="1" />
+                </svg>
+                <div class="auth-mark-ring" aria-hidden="true"></div>
+                <div class="auth-mark-pulse" aria-hidden="true"></div>
+              </div>
+              <div>
+                <h1 id="authTitle" class="auth-title auth-title-3d">DBOps <span>Control Plane</span></h1>
+                <p class="auth-subtitle">Secure Gateway • Multi-Database Operations</p>
+              </div>
+            </div>
+
+            <form id="authForm" class="auth-form auth-form-3d" autocomplete="off" novalidate>
+              <div id="authCredentials" class="auth-cred-block">
+                <div class="form-group">
+                  <label for="authUser">Operator Handle</label>
+                  <div class="auth-field auth-field-3d">
+                    <svg class="ico auth-field-ico" aria-hidden="true"><use href="#i-database"/></svg>
+                    <input type="text" id="authUser" class="form-control auth-input" placeholder="enter operator handle" autocomplete="username" spellcheck="false" autocapitalize="off">
+                    <span class="auth-field-sheen" aria-hidden="true"></span>
+                  </div>
+                  <div id="authCapsWarn" class="auth-caps-warn" hidden>
+                    <svg class="ico" aria-hidden="true" width="14" height="14"><use href="#i-bell"/></svg>
+                    <span>Caps Lock is on</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="authPass">Access Key</label>
+                  <div class="auth-field auth-field-3d">
+                    <svg class="ico auth-field-ico" aria-hidden="true"><use href="#i-lock"/></svg>
+                    <input type="password" id="authPass" class="form-control auth-input mono" placeholder="••••••••••••••••" autocomplete="current-password">
+                    <button type="button" class="auth-reveal auth-reveal-3d" id="authReveal" aria-label="Show password" title="Show password"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></button>
+                    <span class="auth-field-sheen" aria-hidden="true"></span>
+                  </div>
+                  <div class="auth-row-actions">
+                    <label class="auth-remember">
+                      <input type="checkbox" id="authRemember" value="1">
+                      <span class="auth-remember-mark"></span>
+                      <span>Remember session</span>
+                    </label>
+                    <a href="#" class="auth-forgot" id="authForgot">Forgot key?</a>
+                  </div>
+                </div>
+              </div>
+
+              <div id="authMfaStep" class="auth-mfa-step" hidden>
+                <p id="authMfaInstructions" class="auth-mfa-instructions"></p>
+                <div id="authMfaSetup" class="form-group" hidden>
+                  <div class="auth-qr-card auth-qr-card-3d"><img id="authMfaQr" class="auth-mfa-qr" alt="Authenticator setup QR code"></div>
+                  <small class="field-hint">Scan with your authenticator app to link this session.</small>
+                  <label for="authMfaSecret">Manual Entry Key</label>
+                  <input type="text" id="authMfaSecret" class="form-control mono auth-mfa-secret" readonly autocomplete="off">
+                </div>
+                <div class="form-group">
+                  <label for="authMfaCode">6-Digit Verification Cipher</label>
+                  <div class="auth-field auth-field-3d">
+                    <svg class="ico auth-field-ico" aria-hidden="true"><use href="#i-key"/></svg>
+                    <input type="text" id="authMfaCode" class="form-control auth-input mono" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+                    <span class="auth-field-sheen" aria-hidden="true"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div id="authError" class="auth-error auth-error-3d" role="alert" hidden></div>
+
+              <button type="submit" class="btn btn-primary-gradient auth-submit auth-submit-3d" id="authSubmit">
+                <span class="auth-submit-glow" aria-hidden="true"></span>
+                <span class="auth-submit-label" id="authSubmitLabel">Sign in</span>
+                <span class="auth-submit-spinner" aria-hidden="true"></span>
+                <span class="auth-submit-arrow" aria-hidden="true">→</span>
+              </button>
+              <button type="button" class="btn btn-secondary auth-back auth-back-3d" id="authBack" hidden>ABORT & RETURN</button>
+            </form>
+
+            <p class="auth-foot auth-foot-3d">[RESTRICTED ACCESS] • AUTHORIZED OPERATORS ONLY • ALL SESSIONS LOGGED</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="welcomeExperience" class="welcome-experience" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" aria-describedby="welcomeDescription" hidden>
+    <div class="tunnel-hero__bg-grid" aria-hidden="true"></div>
+    <div class="tunnel-hero__bg-glow" aria-hidden="true"></div>
+    <div class="tunnel-hero__ring tunnel-hero__ring--sm" aria-hidden="true"></div>
+    <div class="tunnel-hero__ring tunnel-hero__ring--lg" aria-hidden="true"></div>
+    <div class="tunnel-hero__scene" aria-hidden="true">
+      <div class="tunnel-hero__cards" id="welcomeTunnelCards"></div>
+    </div>
+    <div class="tunnel-hero__content welcome-experience__content">
+      <span class="tunnel-hero__kicker">DBOps Control Plane</span>
+      <h1 id="welcomeTitle" class="tunnel-hero__title">Welcome back,<br><span id="welcomeUser" class="grad">operator.</span></h1>
+      <p id="welcomeDescription" class="tunnel-hero__subtitle">Preparing your database operations workspace.</p>
+      <button id="welcomeContinue" class="btn btn-primary-gradient welcome-experience__continue" type="button">Continue to Console <span aria-hidden="true">→</span></button>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-text">
+        <h1>DBOps</h1>
+        <span class="brand-sub">Control Plane</span>
+      </div>
+      <span class="brand-version" id="uiVersion" title="Front-end build">v3</span>
+    </div>
+
+    <nav class="section-nav" aria-label="Sections">
+      <a href="#command-center" class="nav-link">Console</a>
+      <a href="#overview" class="nav-link">Overview</a>
+      <a href="#backups" class="nav-link">Backups</a>
+      <a href="#restores" class="nav-link">Restore</a>
+      <a href="#restored-databases" class="nav-link">Restored DBs</a>
+      <a href="#data-browser" class="nav-link">Data Browser</a>
+      <a href="#activity" class="nav-link">Activity</a>
+    </nav>
+
+    <div class="header-controls">
+      <button class="cmd-trigger" data-action="open-command" title="Open command palette (Ctrl/⌘ + K)">
+        <span aria-hidden="true">⌘</span>K
+      </button>
+      <div class="refresh-control" title="Auto-refreshes every 8 seconds">
+        <span class="live-dot" id="liveDot" aria-hidden="true"></span>
+        <span class="last-updated" id="lastUpdated">Waiting for data…</span>
+        <button class="icon-btn" id="autoRefreshBtn" data-action="toggle-autorefresh" title="Pause live refresh" aria-label="Toggle auto refresh" type="button"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
+      </div>
+      <button class="btn btn-secondary btn-sm" data-action="open-notifications" type="button" title="Telegram notifications"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-bell"/></svg> Alerts</button>
+      <a href="/static/user-manual.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="Open the DBOps user manual">User Manual</a>
+      <button class="btn btn-secondary btn-sm admin-only" data-action="open-users" type="button">Users</button>
+      <div class="user-chip" id="userChip" title="Signed in">
+        <span class="user-chip-avatar" id="userChipAvatar">A</span>
+        <span class="user-chip-name" id="userChipName">admin</span>
+        <button class="icon-btn user-chip-logout" id="logoutBtn" data-action="logout" type="button" title="Sign out" aria-label="Sign out"><svg class="ico" aria-hidden="true"><use href="#i-lock"/></svg></button>
+      </div>
+      <button class="icon-btn theme-toggle" id="themeToggle" data-action="toggle-theme" type="button" title="Toggle light / dark theme" aria-label="Toggle light or dark theme"><svg class="ico" aria-hidden="true"><use href="#i-moon"/></svg></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- workspace:console:start -->
+    <!-- Command Center hero -->
+    <section class="hero reveal" id="command-center" aria-label="Command center" tabindex="-1">
+      <div class="hero-content">
+        <span class="hero-kicker">Central Operations Core</span>
+        <h2 class="hero-title">Central Backup <span class="grad">System</span></h2>
+        <p class="hero-subtitle">Live integrity, snapshot cadence and disaster-recovery readiness for every registered target — orchestrated from a single control plane.</p>
+        <div class="hero-chips">
+          <div class="hero-chip">
+            <span class="chip-dot ok" id="heroStatusDot" aria-hidden="true"></span>
+            <div class="hero-chip-text"><span class="chip-label">System State</span><strong id="heroStatusText">Secure</strong></div>
+          </div>
+          <div class="hero-chip">
+            <div class="hero-chip-text"><span class="chip-label">Last Snapshot</span><strong id="heroLastBackup">—</strong></div>
+          </div>
+          <div class="hero-chip">
+            <div class="hero-chip-text"><span class="chip-label">Next Run</span><strong id="heroNextRun">—</strong></div>
+          </div>
+          <div class="hero-chip">
+            <div class="hero-chip-text"><span class="chip-label">Telegram</span><strong id="heroNotify">—</strong></div>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="btn btn-primary-gradient" data-action="open-backup" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-snapshot"/></svg> Take Snapshot</button>
+          <button class="btn btn-secondary" data-action="open-restore-latest" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-restore"/></svg> Restore Center</button>
+          <button class="btn btn-secondary" data-action="open-notifications" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-bell"/></svg> Notifications</button>
+        </div>
+      </div>
+      <div class="hero-wordmark" aria-hidden="true">DBOps</div>
+    </section>
+    <!-- workspace:console:end -->
+
+    <!-- workspace:console:start -->
+    <div class="console-workspace">
+      <section id="target-selector" class="db-selector-bar">
+        <div class="db-selector-left">
+          <div class="target-selector-content">
+            <span class="selector-label">Targets</span>
+            <div id="dbPillList" class="db-pill-list db-target-carousel" role="region" aria-label="Registered database targets" aria-roledescription="carousel">
+              <span class="pill-placeholder">Loading targets...</span>
+            </div>
+          </div>
+          <div id="targetHealthSummary" class="target-health-summary" hidden>
+            <div class="target-health-heading">
+              <span id="targetHealthDonut" class="fleet-donut"></span>
+              <span class="target-health-title">Fleet reachability</span>
+              <span id="targetHealthTotal" class="target-health-total"></span>
+            </div>
+            <div id="targetHealthBar" class="target-health-bar" role="img" aria-label="Target reachability">
+              <span id="targetHealthReachableBar" class="target-health-segment reachable"></span>
+              <span id="targetHealthUnreachableBar" class="target-health-segment unreachable"></span>
+              <span id="targetHealthPendingBar" class="target-health-segment pending"></span>
+            </div>
+            <div class="target-health-legend" aria-live="polite">
+              <span><i class="target-health-dot reachable" aria-hidden="true"></i><strong id="targetHealthReachable">0</strong> reachable</span>
+              <span><i class="target-health-dot unreachable" aria-hidden="true"></i><strong id="targetHealthUnreachable">0</strong> unreachable</span>
+              <span><i class="target-health-dot pending" aria-hidden="true"></i><strong id="targetHealthPending">0</strong> pending</span>
+            </div>
+          </div>
+        </div>
+        <div class="db-selector-right">
+          <div class="search-box" id="dbSearchWrap" hidden>
+            <input type="search" id="dbSearchInput" class="search-input" placeholder="Filter targets..." aria-label="Filter database targets">
+          </div>
+          <button class="btn btn-primary-gradient" data-action="open-add-db" type="button">
+            <svg class="ico ico-sm" aria-hidden="true"><use href="#i-plus"/></svg> Add database instance
+          </button>
+        </div>
+      </section>
+
+      <section class="actions-toolbar" aria-label="Active database actions">
+        <div class="active-target-info">
+          <span id="activeEngineIcon" class="active-engine-icon"></span>
+          <div class="active-target-text">
+            <div class="active-target-name-row">
+              <strong id="activeDbTitle">Primary Database</strong>
+              <span id="activeEngineBadge" class="badge badge-info">POSTGRES</span>
+            </div>
+            <button class="masked-url" id="activeDbUrlMasked" data-action="copy-url" title="Click to copy connection URL" type="button">postgresql://…</button>
+          </div>
+        </div>
+        <div class="action-buttons-group">
+          <button class="btn btn-sm btn-secondary" data-action="ping" title="Instant non-invasive connectivity test" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-zap"/></svg> Ping</button>
+          <button class="btn btn-sm btn-secondary" data-action="open-schedule" title="Automate periodic snapshots" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Schedule</button>
+          <button class="btn btn-sm btn-primary-gradient" data-action="open-backup" title="Create a PostgreSQL snapshot" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-snapshot"/></svg> Snapshot</button>
+          <button class="btn btn-sm btn-danger-ghost" id="unregisterBtn" data-action="unregister" title="Remove from monitoring" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-trash"/></svg> Unregister</button>
+        </div>
+      </section>
+
+      <section class="section reveal" id="remoteServers">
+        <div class="section-header"><div><h2 class="section-title">Database Servers</h2><p class="section-subtitle">Provision new PostgreSQL containers under dedicated paths and copy snapshots to server-specific folders.</p></div><button class="btn btn-secondary btn-sm" data-action="open-server-dialog" type="button">Add Server</button></div>
+        <div class="server-operations-layout">
+          <div id="serverCards" class="server-grid"><div class="table-loading">Loading registered servers?</div></div>
+          <aside class="server-live-console" id="serverLiveConsole" aria-live="polite" aria-label="Live server provisioning output" hidden>
+            <div class="server-live-console-head"><div><strong>Live server output</strong><span id="serverOperationStatus" class="badge badge-info">Idle</span></div><div class="server-live-console-actions"><button class="btn btn-secondary btn-sm" data-action="clear-server-output" type="button">Clear</button><button class="btn btn-secondary btn-sm" data-action="close-server-output" type="button" aria-label="Close live output">Close</button></div></div>
+            <div id="serverOperationLog" class="server-operation-log"></div>
+          </aside>
+        </div>
+      </section>
+    </div>
+    <!-- workspace:console:end -->
+
+    <!-- workspace:overview:start -->
+    <!-- Metrics -->
+    <section class="grid-metrics" aria-label="Key metrics">
+      <article class="card interactive-card reveal">
+        <div class="card-head">
+          <div class="card-icon tile-indigo" aria-hidden="true">
+            <svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg>
+          </div>
+          <span class="card-title">Recent Migrations</span>
+          <span id="recentMigrationBadge" class="badge badge-info">Read only</span>
+        </div>
+        <div id="recentMigrationVal" class="card-value recent-migration-value">Checking…</div>
+        <div id="recentMigrationMeta" class="card-footnote">Looking for a recognized migration record</div>
+        <div id="recentMigrationFootnote" class="card-footnote">Refresh migration history to check for newer entries.</div>
+      </article>
+
+      <article class="card interactive-card reveal">
+        <div class="card-head">
+          <div class="card-icon tile-green" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <span class="card-title" title="Shared-buffer hits divided by shared-buffer hits plus read requests. PostgreSQL read requests can sometimes be served by the operating system cache, so they do not always mean physical disk access. The card value is cumulative since database statistics were reset. This is a cache efficiency metric, not an overall database health check.">Buffer Cache Hit Ratio</span>
+          <span id="cacheBadge" class="badge badge-info">Cache status</span>
+        </div>
+        <div id="cacheHitVal" class="card-value">--%</div>
+        <div id="cacheVisualization" class="metric-visual cache-visual" aria-label="Buffer cache hit ratio chart"></div>
+      </article>
+
+      <article class="card interactive-card reveal">
+        <div class="card-head">
+          <div class="card-icon tile-violet" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 5c0-1.66 4-3 9-3s9 1.34 9 3-4 3-9 3-9-1.34-9-3z"/></svg>
+          </div>
+          <span class="card-title">Storage Consumed</span>
+          <span id="dbNameBadge" class="badge badge-info">primary</span>
+        </div>
+        <div id="dbSizeVal" class="card-value">--</div>
+        <div id="sizeVisualization" class="metric-visual relation-visual" aria-label="Largest database relations by storage"></div>
+        <div id="tableCountSummary" class="card-footnote">Monitoring user relations…</div>
+      </article>
+
+      <article class="card interactive-card reveal">
+        <div class="card-head">
+          <div class="card-icon tile-amber" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          </div>
+          <span class="card-title">Slow Queries &amp; Deadlocks</span>
+          <span id="deadlockBadge" class="badge badge-success">0 Deadlocks</span>
+        </div>
+        <div id="slowQueryVal" class="card-value">0 Slow</div>
+        <div id="slowQueryVisualization" class="metric-visual slow-visual" aria-label="Current slow query duration chart"></div>
+      </article>
+    </section>
+    <!-- workspace:overview:end -->
+
+    <!-- workspace:overview:start -->
+    <!-- System status -->
+    <section class="system-status-bar" id="overview">
+      <div class="status-indicator">
+        <div class="status-dot-wrapper">
+          <div id="statusDot" class="status-dot"></div>
+          <div class="status-ping"></div>
+        </div>
+        <div>
+          <div class="info-label">Active Connection</div>
+          <div id="statusText" class="info-value">Connecting…</div>
+        </div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Latency</div>
+        <div id="latencyVal" class="info-value accent-text">-- ms</div>
+        <div id="latencySparkline" class="latency-spark"></div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Engine Version</div>
+        <div id="versionVal" class="info-value">--</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Server Uptime</div>
+        <div id="uptimeVal" class="info-value">--</div>
+      </div>
+      <button class="btn btn-sm btn-secondary" data-action="refresh" title="Refresh all metrics now" type="button">
+        <svg class="ico ico-sm" aria-hidden="true"><use href="#i-refresh"/></svg> Refresh
+      </button>
+    </section>
+    <!-- workspace:overview:end -->
+
+    <!-- workspace:overview:start -->
+    <!-- Migration history (read-only discovery) -->
+    <section class="section reveal" id="migrationHistory">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Migration History</h2>
+          <p class="section-subtitle">Read-only inspection of recognized PostgreSQL migration ledgers. No migrations are run or changed.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" data-action="refresh-migrations" type="button">
+          <svg class="ico ico-sm" aria-hidden="true"><use href="#i-refresh"/></svg> Refresh history
+        </button>
+      </div>
+      <div id="migrationHistoryNote" class="card-footnote" role="status">Checking for migration history…</div>
+      <div class="table-responsive">
+        <table>
+          <thead><tr><th>Migration system</th><th>Version</th><th>Name / script</th><th>Applied at</th><th>Status</th></tr></thead>
+          <tbody id="migrationHistoryBody"><tr><td colspan="5" class="table-empty">Migration history will appear here.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- workspace:overview:end -->
+
+    <!-- workspace:overview:start -->
+    <!-- Active queries -->
+    <section class="section reveal" id="queries">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Active Queries &amp; Long-Running Operations</h2>
+          <p class="section-subtitle">Real-time inspection of active database processes with safe termination controls.</p>
+        </div>
+        <span id="slowQueriesBadge" class="badge badge-success">0 Active Slow Queries</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>PID / OpID</th><th>User</th><th>Client</th><th>Duration</th><th>Statement / Command</th><th class="col-action">Action</th>
+            </tr>
+          </thead>
+          <tbody id="slowQueriesTableBody">
+            <tr><td colspan="6" class="table-empty">No slow queries exceeding the threshold. Database executing smoothly.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <!-- workspace:overview:end -->
+
+    <!-- workspace:backups:start -->
+    <!-- Backups -->
+    <div class="flex-row split-row backups-split">
+      <div class="section reveal" id="backups">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">PostgreSQL Snapshots &amp; Backups</h2>
+            <p class="section-subtitle">Create, verify, and manage PostgreSQL snapshots. Snapshot creation can add database and storage load. Deleting a snapshot removes only this app's local archive and list entry; repository and remote-server copies stay intact.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary btn-sm" data-action="open-schedule" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Backup Schedule</button>
+            <button class="btn btn-sm btn-primary-gradient" data-action="open-backup" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-plus"/></svg> Take Snapshot</button>
+          </div>
+        </div>
+        <div class="table-responsive backups-table-wrap">
+          <table class="backups-table">
+            <thead>
+              <tr>
+                <th>Backup ID</th><th>Filename</th><th>Description</th><th>Format</th><th>Size</th><th>Status</th><th>Age</th><th>Created At</th><th class="col-action">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="backupsTableBody">
+              <tr><td colspan="9" class="table-loading"><span class="spinner"></span> Loading snapshots…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <aside class="section reveal backup-trend-panel" id="backupTrendPanel">
+        <div class="section-header">
+          <h2 class="section-title">Snapshot size trend</h2>
+          <span id="backupTrendCount" class="badge badge-info">last 0</span>
+        </div>
+        <figure id="backupSizeTrend" class="backup-trend" hidden></figure>
+      </aside>
+    </div>
+    <!-- workspace:backups:end -->
+
+    <!-- workspace:restore:start -->
+    <!-- Restore / disaster recovery -->
+    <section class="section reveal" id="restores">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Restore &amp; Disaster Recovery</h2>
+          <p class="section-subtitle">Restore into a new database by default, or explicitly apply a local verified snapshot to an existing registered PostgreSQL database.</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary btn-sm" data-action="open-restore-latest" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-restore"/></svg> New Restore</button>
+          <button class="btn btn-secondary btn-sm" data-action="refresh-restores" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-refresh"/></svg> Refresh</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Restore ID</th><th>Backup</th><th>Mode</th><th>Destination</th><th>Status</th><th>Duration</th><th>Started</th><th class="col-action">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="restoresTableBody">
+            <tr><td colspan="8" class="table-loading"><span class="spinner"></span> Loading restore history…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <!-- workspace:restore:end -->
+
+    <!-- workspace:restored-databases:start -->
+    <section class="section reveal" id="restored-databases">
+      <div class="section-header">
+        <div>
+          <h3 class="section-title">Restored Databases</h3>
+          <p class="section-subtitle">Find the database created by a clone restore and copy its connection URL to share with your team. URLs include credentials; only administrators can copy them. The copied URL uses the app’s Docker network name. Teammates connecting from outside Docker may need your machine’s reachable IP or DNS name and the published PostgreSQL port.</p>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead><tr><th>Database</th><th>Destination server</th><th>Monitoring</th><th class="col-action">Connection URL</th></tr></thead>
+          <tbody id="restoredDatabasesBody">
+            <tr><td colspan="4" class="table-loading">No restored databases yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <!-- workspace:restored-databases:end -->
+
+
+
+    <!-- workspace:data-browser:start -->
+
+    <section class="section reveal" id="database-browser">
+      <div class="section-header">
+        <div><h2 class="section-title">Read-only Data Browser</h2><p class="section-subtitle">Browse tables, collections, and rows from the active target. Each request is read-only and limited to 200 rows.</p></div>
+        <div class="header-actions">
+          <button class="btn btn-secondary btn-sm" data-action="browse-refresh-tables" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-refresh"/></svg> Refresh tables</button>
+          <button class="btn btn-secondary btn-sm" data-action="browse-fullscreen" type="button">Full screen</button>
+        </div>
+      </div>
+      <div class="browse-toolbar">
+        <label class="activity-filter-label" for="browseDatabaseSelect">Database</label>
+        <select id="browseDatabaseSelect" class="form-control" style="max-width:320px"><option value="">Loading databases…</option></select>
+        <label class="activity-filter-label" for="browseTableSelect">Table or collection</label>
+        <select id="browseTableSelect" class="form-control" style="max-width:360px" disabled><option value="">Select a database first</option></select>
+        <button class="btn btn-primary-gradient btn-sm" data-action="browse-load" type="button">Load rows</button>
+        <span id="browseStatus" class="card-footnote" aria-live="polite">No data loaded.</span>
+      </div>
+      <div class="table-responsive scroll-area" style="margin-top:1rem">
+        <table><thead id="browseTableHead"><tr><th>Data</th></tr></thead><tbody id="browseTableBody"><tr><td class="table-empty">Select a table or collection to view its rows.</td></tr></tbody></table>
+      </div>
+      <div class="browse-pagination"><button class="btn btn-secondary btn-sm" id="browsePrev" data-action="browse-prev" type="button" disabled>Previous</button><span id="browsePageLabel" class="card-footnote">Page 1</span><button class="btn btn-secondary btn-sm" id="browseNext" data-action="browse-next" type="button" disabled>Next</button></div>
+    </section>
+    <!-- workspace:data-browser:end -->
+
+    <!-- workspace:activity:start -->
+    <!-- Operations activity timeline -->
+    <section class="section reveal" id="activity">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Operations Activity</h2>
+          <p class="section-subtitle">Each operator has a colored branch. Follow connected actions from newest to oldest.</p>
+        </div>
+        <div class="activity-filter-wrap">
+          <label class="activity-filter-label" for="activityDbFilter">Database</label>
+          <select class="form-control activity-db-filter" id="activityDbFilter">
+            <option value="">All databases</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary btn-sm" data-action="clear-activity" type="button">Clear Log</button>
+      </div>
+      <div class="activity-at-a-glance" aria-live="polite">
+        <div class="activity-overview-mark" aria-hidden="true"><svg class="ico"><use href="#i-zap"/></svg></div>
+        <div class="activity-overview-stat"><strong id="activityTodayCount">0</strong><span>today</span></div>
+        <div class="activity-overview-divider" aria-hidden="true"></div>
+        <div class="activity-overview-stat"><strong id="activityTotalCount">0</strong><span>recent events</span></div>
+        <span class="activity-local-label">Shared team feed</span>
+      </div>
+      <div id="activityBranchLegend" class="activity-branch-legend" aria-label="Operator branches"></div>
+      <div id="activityList" class="timeline">
+        <div class="timeline-empty">No activity recorded yet. Snapshots, pings, verifications and target switches will appear here.</div>
+      </div>
+      <button id="activityMoreBtn" class="activity-more-btn" data-action="toggle-activity-history" type="button" hidden></button>
+    </section>
+    <!-- workspace:activity:end -->
+  </main>
+
+  <!-- Command palette -->
+  <dialog id="commandDialog" class="command-dialog" closedby="any" aria-label="Command palette">
+    <div class="command">
+      <div class="command-input-row">
+        <span class="command-ico" aria-hidden="true">⌕</span>
+        <input id="commandInput" class="command-input" placeholder="Search actions and databases…" autocomplete="off" spellcheck="false">
+        <kbd class="kbd">Esc</kbd>
+      </div>
+      <div id="commandList" class="command-list" role="listbox" aria-label="Commands"></div>
+    </div>
+  </dialog>
+
+  <!-- Dialog: Add database -->
+  <dialog id="addDbDialog" closedby="any" aria-labelledby="addDbTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-indigo" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-database"/></svg></div>
+        <div>
+          <h3 id="addDbTitle" class="dialog-title">Add Any Database Target</h3>
+          <p class="dialog-subtitle">Paste a database URL and choose its engine. Connectivity is checked; read-only access depends on the account permissions you configure.</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="newDbName">Database Label</label>
+        <input type="text" id="newDbName" class="form-control" placeholder="e.g. Production Analytics (MongoDB)" autocomplete="off">
+        <small class="field-error" id="newDbNameError" hidden></small>
+      </div>
+
+      <div class="form-group">
+        <label for="newDbUrl">Connection URL</label>
+        <input type="text" id="newDbUrl" class="form-control mono" placeholder="postgresql://user:password@host:5432/dbname" autocomplete="off" data-autodetect>
+        <small class="field-hint">Supported: postgresql://, mongodb://, mongodb+srv://, mysql://, redis://</small>
+        <small class="field-error" id="newDbUrlError" hidden></small>
+      </div>
+
+      <div class="form-group">
+        <label for="newDbEngine">Engine (auto-detected)</label>
+        <select id="newDbEngine" class="form-control">
+          <option value="postgres" selected>PostgreSQL</option>
+          <option value="mongodb">MongoDB</option>
+          <option value="mysql">MySQL / MariaDB</option>
+          <option value="redis">Redis</option>
+        </select>
+      </div>
+
+      <div id="addDbStatus" class="inline-status" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" data-action="test-connection">Test Connection</button>
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="addDbDialog">Cancel</button>
+          <button type="button" class="btn btn-primary-gradient" id="submitDbBtn" data-action="submit-add-db">Add Database</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog: Create backup -->
+  <dialog id="createBackupDialog" closedby="any" aria-labelledby="backupTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-violet" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-snapshot"/></svg></div>
+        <div>
+          <h3 id="backupTitle" class="dialog-title">Create PostgreSQL Snapshot</h3>
+          <p class="dialog-subtitle">Creates a point-in-time snapshot without taking exclusive locks.</p>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Target Database</label>
+        <div id="backupTargetLabel" class="readonly-value">Primary Database</div>
+      </div>
+      <div class="form-group">
+        <label for="backupFormat">Format</label>
+        <select id="backupFormat" class="form-control">
+          <option value="custom" selected>Custom Archive (.dump / .archive — Recommended)</option>
+          <option value="plain">Plain Script (.sql.gz)</option>
+        </select>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="backupCompress">Compression</label>
+          <select id="backupCompress" class="form-control"><option value="true" selected>Enabled (gzip)</option><option value="false">Disabled</option></select>
+        </div>
+        <div class="form-group">
+          <label for="backupEncrypt">AES-256 Encryption</label>
+          <select id="backupEncrypt" class="form-control"><option value="false" selected>Disabled</option><option value="true">Enabled</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="backupDesc">Description (optional)</label>
+        <input type="text" id="backupDesc" class="form-control" placeholder="e.g. Pre-upgrade snapshot">
+      </div>
+      <div class="form-group"><label>Copy snapshot to remote servers</label><div id="backupRemoteServers" class="server-check-list">No servers registered.</div></div>
+      <div class="dialog-actions">
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="createBackupDialog">Cancel</button>
+          <button type="button" class="btn btn-primary-gradient" id="startBackupBtn" data-action="submit-backup">Start Snapshot</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="serverDialog" closedby="any" aria-labelledby="serverDialogTitle"><div class="dialog-content">
+    <div class="dialog-head"><div><h3 id="serverDialogTitle" class="dialog-title">Register Remote Server</h3><p class="dialog-subtitle">SSH credentials are encrypted in the app registry. Remote files are limited to the directories entered below.</p></div></div>
+    <div class="form-grid">
+      <div class="form-group"><label for="serverName">Server label</label><input id="serverName" class="form-control" placeholder="Backup host 1"></div>
+      <div class="form-group"><label for="serverHost">Server IP address</label><input id="serverHost" class="form-control mono" placeholder="10.0.0.12"></div>
+      <div class="form-group"><label for="serverSshPort">SSH port</label><input id="serverSshPort" class="form-control" type="number" value="22" min="1" max="65535"></div>
+      <div class="form-group"><label for="serverUsername">SSH username</label><input id="serverUsername" class="form-control" autocomplete="username"></div>
+      <div class="form-group"><label for="serverPassword">SSH password</label><input id="serverPassword" class="form-control" type="password" autocomplete="new-password"></div>
+      <div class="form-group"><label for="serverDatabaseRoot">New database data root</label><input id="serverDatabaseRoot" class="form-control mono" value="/srv/dbops/databases"></div>
+      <div class="form-group"><label for="serverBackupRoot">Snapshot directory</label><input id="serverBackupRoot" class="form-control mono" value="/srv/dbops/snapshots"></div>
+    </div>
+    <small class="field-hint">SSH host identity is checked against the app's trusted known_hosts file. Enter absolute Linux paths; database and snapshot paths may be the same. Their parent directories must already exist; registration checks paths without creating remote files.</small>
+    <div class="dialog-actions"><div class="dialog-actions-right"><button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="serverDialog">Cancel</button><button type="button" class="btn btn-primary-gradient" data-action="register-server">Register Server</button></div></div>
+  </div></dialog>
+
+  <dialog id="provisionDbDialog" closedby="any" aria-labelledby="provisionDbTitle"><div class="dialog-content">
+    <div class="dialog-head"><div><h3 id="provisionDbTitle" class="dialog-title">Create Isolated PostgreSQL Container</h3><p id="provisionServerLabel" class="dialog-subtitle">New container and new data directory only. Existing containers are not changed.</p></div></div>
+    <div class="form-grid">
+      <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>
+      <div class="form-group"><label for="provisionContainerName">Docker container name</label><input id="provisionContainerName" class="form-control mono" value="dbops-postgres" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" required><small class="field-hint">Letters, numbers, dots, underscores, and hyphens; must be unique on this server.</small></div>
+      <div class="form-group"><label for="provisionDbName">Database name</label><input id="provisionDbName" class="form-control mono" value="appdb"></div>
+      <div class="form-group"><label for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"></div>
+      <div class="form-group"><label for="provisionDbPassword">Database password (16+ characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"></div>
+      <div class="form-group"><label for="provisionPort">Server port</label><input id="provisionPort" class="form-control" type="number" value="55432" min="1024" max="65535"></div>
+      <div class="form-group"><label for="provisionImage">PostgreSQL image</label><input id="provisionImage" class="form-control mono" value="postgres:16-alpine" pattern="postgres:(1[4-9]|[2-9][0-9])(-alpine)?"><small class="field-hint">If the image is not on the server, DBOps downloads it from Docker Hub before creating the container.</small></div>
+      <div class="form-group form-grid-full"><label for="provisionImageArchive">Load image from archive (for servers without Docker Hub access)</label><div class="server-inline-form"><input id="provisionImageArchive" class="form-control" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"><button class="btn btn-secondary btn-sm" type="button" data-action="upload-postgres-image">Upload and load image</button></div><small class="field-hint">Create a matching archive with <code>docker pull postgres:16-alpine</code> then <code>docker save -o postgres-16-alpine.tar postgres:16-alpine</code> on a machine with Docker access.</small></div>
+    </div>
+    <small class="field-hint">After creation, the new database is selected under Targets. Click its masked connection URL in the Console toolbar to copy the full URL. The server port must be reachable by teammates who connect from outside this application.</small>
+    <div class="dialog-actions"><div class="dialog-actions-right"><button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="provisionDbDialog">Cancel</button><button type="button" class="btn btn-primary-gradient" data-action="provision-postgres">Create New Container</button></div></div>
+  </div></dialog>
+
+  <!-- Dialog: Schedule -->
+  <dialog id="scheduleDialog" closedby="any" aria-labelledby="scheduleTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-green" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-clock"/></svg></div>
+        <div>
+          <h3 id="scheduleTitle" class="dialog-title">Automated Snapshot Schedule</h3>
+          <p class="dialog-subtitle">Choose the database to snapshot, where to copy it, and when the schedule runs.</p>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="scheduleDbId">Database to snapshot</label>
+        <select id="scheduleDbId" class="form-control"><option value="">Loading databases…</option></select>
+      </div>
+      <div class="form-group">
+        <label>Snapshot destinations</label>
+        <div class="readonly-value">A local archive is always saved in the configured backup folder.</div>
+        <small class="field-hint">Optionally copy each completed snapshot to mounted repositories or registered remote servers. Copies are checksum-verified.</small>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Mounted repositories</label><div id="scheduleRepositories" class="server-check-list">Loading repositories…</div></div>
+        <div class="form-group"><label>Remote servers</label><div id="scheduleServers" class="server-check-list">Loading servers…</div></div>
+      </div>
+      <div class="form-group">
+        <label for="scheduleFrequency">Repeat</label>
+        <select id="scheduleFrequency" class="form-control">
+          <option value="daily" selected>Every day</option>
+          <option value="weekly">Every week</option>
+          <option value="monthly">Every month</option>
+          <option value="current" hidden>Keep current schedule</option>
+        </select>
+      </div>
+      <div class="form-grid schedule-options">
+        <div class="form-group" id="scheduleTimeGroup"><label for="scheduleTime">Time (UTC)</label><input type="time" id="scheduleTime" class="form-control" value="02:00"><small class="field-hint">The preview also shows this time in Sri Lanka time (SLST, UTC+5:30).</small></div>
+        <div class="form-group" id="scheduleWeekdayGroup" hidden><label for="scheduleWeekday">Day of the week</label><select id="scheduleWeekday" class="form-control"><option value="mon">Monday</option><option value="tue">Tuesday</option><option value="wed">Wednesday</option><option value="thu">Thursday</option><option value="fri">Friday</option><option value="sat">Saturday</option><option value="sun">Sunday</option></select></div>
+        <div class="form-group" id="scheduleMonthDayGroup" hidden><label for="scheduleMonthDay">Day of the month</label><select id="scheduleMonthDay" class="form-control"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option></select><small class="field-hint">Choose 1–28 so the selected day exists every month.</small></div>
+      </div>
+      <input type="hidden" id="scheduleCron" value="0 2 * * *">
+      <div class="schedule-preview" id="schedulePreview" aria-live="polite">Snapshots will run every day at 02:00 UTC (Sri Lanka time: 7:30 AM).</div>
+      <div class="form-group">
+        <label for="scheduleEnabled">Status</label>
+        <select id="scheduleEnabled" class="form-control"><option value="true" selected>Active</option><option value="false">Disabled</option></select>
+      </div>
+      <div class="form-group">
+        <label>Next snapshot (UTC and Sri Lanka time)</label>
+        <div id="scheduleNextRun" class="readonly-value accent-text">--</div>
+      </div>
+      <div class="dialog-actions">
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="scheduleDialog">Cancel</button>
+          <button type="button" class="btn btn-primary-gradient" data-action="submit-schedule">Save Schedule</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog: Verify -->
+  <dialog id="verifyDialog" closedby="any" aria-labelledby="verifyTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-amber" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-search"/></svg></div>
+        <div>
+          <h3 id="verifyTitle" class="dialog-title">Archive Integrity Verification</h3>
+          <p class="dialog-subtitle">Non-destructive checksum &amp; table-of-contents validation.</p>
+        </div>
+      </div>
+      <div id="verifyDetails" class="verify-details"><span class="spinner"></span> Validating TOC and checksums…</div>
+      <div class="dialog-actions">
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="verifyDialog">Close</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog: Restore -->
+  <dialog id="restoreDialog" closedby="any" aria-labelledby="restoreTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-red" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-restore"/></svg></div>
+        <div>
+          <h3 id="restoreTitle" class="dialog-title">Restore Snapshot</h3>
+          <p class="dialog-subtitle">Choose which saved snapshot to copy, where to restore it, and whether to create a database or write into an existing one.</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="restoreSourceDbSelect">1. Database snapshot source</label>
+        <select id="restoreSourceDbSelect" class="form-control"></select>
+        <small class="field-hint">Only databases with a completed snapshot can be used as a restore source. Registered PostgreSQL databases without a completed snapshot are shown as unavailable.</small>
+        <small class="field-hint">Choose a registered database to narrow the snapshot list. This is the source; the destination is selected separately below.</small>
+      </div>
+      <div class="form-group">
+        <label for="restoreBackupSelect">2. Snapshot to restore</label>
+        <select id="restoreBackupSelect" class="form-control"></select>
+        <small class="field-hint">This is a saved copy of the source database. The source is unchanged unless you explicitly choose it as the existing restore target.</small>
+      </div>
+
+      <div class="restore-version-note" role="note" aria-label="PostgreSQL version compatibility">
+        <span aria-hidden="true">ⓘ</span>
+        <span>Before restoring, check the PostgreSQL major version on the snapshot source and target. Use the same major version for the most reliable restore; restoring a newer-version snapshot to an older server may fail because it does not support settings or features in the archive.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="restoreSourceServer">Snapshot file location</label>
+        <select id="restoreSourceServer" class="form-control"><option value="">Local or mounted repository</option></select>
+        <small class="field-hint">Only “Local or mounted repository” appears until this snapshot has a verified copy on a registered remote server. To add a remote option, register a server in Servers and copy this snapshot there. Remote copies can only restore into a new database.</small>
+      </div>
+
+      <div class="form-group" id="restoreCloneTargetGroup">
+        <label for="restoreTargetDbId" id="restoreTargetFieldLabel">3. Destination PostgreSQL server</label>
+        <select id="restoreTargetDbId" class="form-control"></select>
+        <small class="field-hint" id="restoreTargetFieldHint">Choose a registered PostgreSQL target. To restore into another existing database, choose “Write into an existing database” below; this list will show registered PostgreSQL databases you can select.</small>
+      </div>
+      <div class="form-group">
+        <label for="restoreMode">4. What should happen on the destination?</label>
+        <select id="restoreMode" class="form-control">
+          <option value="clone">Create a separate new database (recommended)</option>
+          <option value="existing">Write into an existing database</option>
+        </select>
+      </div>
+      <div class="form-group" id="restoreNewDbGroup">
+        <label for="restoreNewDbName">5. Name for the new database</label>
+        <input type="text" id="restoreNewDbName" class="form-control mono" placeholder="demo_db_restore_2026" autocomplete="off">
+        <small class="field-hint">Created on the destination server. Must be a new name that does not already exist there.</small>
+        <small class="field-error" id="restoreNewDbNameError" hidden></small>
+      </div>
+
+      <div id="restoreWarning" class="restore-warning">
+        <span aria-hidden="true">⚠</span>
+        <span id="restoreWarningText">A separate database will be created on the selected destination server. Existing databases, including the snapshot source, are left unchanged.</span>
+      </div>
+
+      <div class="form-group restore-plan" aria-live="polite">
+        <strong>Restore plan</strong>
+        <div><span>Snapshot from</span><b id="restorePlanSource">Select a snapshot</b></div>
+        <div><span>Restore to</span><b id="restorePlanDestination">Select a destination</b></div>
+        <div><span>Effect</span><b id="restorePlanEffect">No database has been changed yet.</b></div>
+      </div>
+
+      <div class="form-group">
+        <label for="restoreConfirm">6. Type <code id="restoreConfirmPhrase">RESTORE</code> to confirm</label>
+        <input type="text" id="restoreConfirm" class="form-control mono" placeholder="RESTORE" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div id="restoreStatus" class="inline-status" hidden></div>
+
+      <div class="dialog-actions">
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="restoreDialog">Cancel</button>
+          <button type="button" class="btn btn-danger" id="startRestoreBtn" data-action="submit-restore">Restore Now</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog: Telegram notifications -->
+  <dialog id="notificationsDialog" closedby="any" aria-labelledby="notifyTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-cyan" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-bell"/></svg></div>
+        <div>
+          <h3 id="notifyTitle" class="dialog-title">Telegram Notifications</h3>
+          <p class="dialog-subtitle">Route operational events to a Telegram chat. Settings are stored on the server and seeded from environment variables.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="notifyEnabled">Delivery</label>
+          <select id="notifyEnabled" class="form-control">
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="notifySilent">Sound</label>
+          <select id="notifySilent" class="form-control">
+            <option value="false">With sound</option>
+            <option value="true">Silent</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="notifyBotToken">Bot Token</label>
+        <input type="password" id="notifyBotToken" class="form-control mono" placeholder="123456789:AA…" autocomplete="off">
+        <small class="field-hint" id="notifyTokenHint">Stored server-side. The saved token is shown masked.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="notifyChatId">Chat IDs</label>
+        <input type="text" id="notifyChatId" class="form-control mono" placeholder="123456789, -1001234567890 or @channel" autocomplete="off">
+        <small class="field-hint">Optional fixed chats. Users who send /start to this bot are added automatically; /stop removes them. The listener needs polling access (no webhook configured).</small>
+        <div class="telegram-recipient-list" aria-live="polite">
+          <strong>Registered Telegram IDs</strong>
+          <ul id="notifyTelegramRecipients"><li class="muted">No users have registered with /start yet.</li></ul>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Event Subscriptions</label>
+        <div class="notify-events" id="notifyEvents"></div>
+      </div>
+
+      <div id="notifyStatus" class="inline-status" hidden></div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" data-action="test-notification">Send Test</button>
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="notificationsDialog">Cancel</button>
+          <button type="button" class="btn btn-primary-gradient" id="saveNotifyBtn" data-action="save-notifications">Save Settings</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog: API key -->
+
+  <!-- Dialog: Confirm -->
+  <dialog id="confirmDialog" closedby="any" aria-labelledby="confirmTitle">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <div class="dialog-icon tile-red" aria-hidden="true" id="confirmIcon"><svg class="ico ico-lg"><use href="#i-warning"/></svg></div>
+        <div>
+          <h3 id="confirmTitle" class="dialog-title">Please confirm</h3>
+          <p id="confirmMessage" class="dialog-subtitle">Are you sure?</p>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <div class="dialog-actions-right">
+          <button type="button" class="btn btn-secondary" data-action="confirm-no">Cancel</button>
+          <button type="button" class="btn btn-danger" data-action="confirm-yes">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Footer: diagonal light beam + giant bottom-cropped wordmark -->
+  <footer class="bwf" id="siteFooter">
+    <div class="bwf-beam" aria-hidden="true"></div>
+    <div class="bwf-glow" aria-hidden="true"></div>
+    <div class="bwf-inner">
+      <div class="bwf-top">
+        <div class="bwf-brand">
+          <div>
+            <div class="bwf-name">DBOps <span>Control Plane</span></div>
+            <p class="bwf-tag">Central backup, health &amp; disaster-recovery for every database you run.</p>
+          </div>
+        </div>
+        <nav class="bwf-cols" aria-label="Footer">
+          <div class="bwf-col">
+            <h4>Platform</h4>
+            <a href="#command-center">Console</a>
+            <a href="#overview">Overview</a>
+            <a href="/overview">Queries</a>
+          </div>
+          <div class="bwf-col">
+            <h4>Operations</h4>
+            <a href="#backups">Snapshots</a>
+            <a href="#restores">Restore Center</a>
+            <a href="#" data-action="open-schedule">Schedule</a>
+            <a href="#" data-action="open-notifications">Notifications</a>
+          </div>
+        </nav>
+      </div>
+
+      <div class="bwf-base">
+        <span class="bwf-status"><span class="chip-dot ok" aria-hidden="true"></span> All systems operational</span>
+        <span class="bwf-meta">Lock-free MVCC snapshots · AES-256 · Telegram alerts</span>
+        <span>© <span id="footerYear">2026</span> DBOps Control Plane</span>
+      </div>
+    </div>
+  </footer>
+
+  <dialog id="usersDialog" class="app-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header"><div><h2>Manage users</h2><p>Create login credentials or remove an account.</p></div><button class="icon-btn" data-action="close-dialog" data-dialog="usersDialog" aria-label="Close">Close</button></div>
+      <form id="newUserForm" class="dialog-body">
+        <div class="form-group"><label for="newUsername">Username</label><input id="newUsername" class="form-control" minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" required></div>
+        <div class="form-group"><label for="newUserPassword">Temporary password (12+ characters)</label><input id="newUserPassword" class="form-control" type="password" minlength="12" required></div>
+        <div class="form-group"><label for="newUserRole">Role</label><select id="newUserRole" class="form-control"><option value="user">User — standard access</option><option value="admin">Administrator — full privileges</option></select><small class="field-hint">Administrators can manage users and access all application features.</small></div>
+        <div class="form-group">
+          <label class="new-user-mfa-label">
+            <input type="checkbox" id="newUserMfa" value="1">
+            <span>Enable Microsoft Authenticator (MFA)</span>
+          </label>
+          <small class="field-hint">When enabled, the new user must scan the QR code below during first sign-in.</small>
+        </div>
+        <button class="btn btn-primary" type="submit">Create user</button>
+      </form>
+      <div id="userMfaResult" class="dialog-body" hidden>
+        <div class="form-group"><label>Microsoft Authenticator Setup</label></div>
+        <div class="auth-qr-card auth-qr-card-3d"><img id="userMfaQr" class="auth-mfa-qr" alt="Authenticator setup QR code"></div>
+        <div class="form-group"><label for="userMfaSecret">Manual Entry Key</label><input type="text" id="userMfaSecret" class="form-control mono auth-mfa-secret" readonly autocomplete="off"></div>
+        <small class="field-hint">Share the QR code or manual key with the new user. They will scan it with Microsoft Authenticator.</small>
+      </div>
+      <div id="usersList" class="dialog-body"></div>
+    </div>
+  </dialog>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <noscript>
+    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0a0c11;color:#e9edf4;padding:2rem;text-align:center;">
+      This dashboard requires JavaScript to be enabled.
+    </div>
+  </noscript>
+
+  <script defer src="/static/app.js?v=73"></script>
+</body>
+</html>
