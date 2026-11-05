@@ -34,6 +34,23 @@ DBOps brings common operational workflows into one self-hosted dashboard and API
 - **Operational controls** for latency checks and explicit query termination, with documented impact.
 - **Self-hosted deployment** using Docker Compose or a local Python environment.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/console.png" alt="DBOps console showing registered database targets" width="100%"><br><strong>Console and database targets</strong></td>
+    <td align="center"><img src="docs/images/server-management.png" alt="Remote server management and health" width="100%"><br><strong>Remote server management</strong></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/overview-migrations.png" alt="Overview dashboard with migration history" width="100%"><br><strong>Overview and migration history</strong></td>
+    <td align="center"><img src="docs/images/restored-databases.png" alt="Restored databases page" width="100%"><br><strong>Restored databases</strong></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/container-provisioning.png" alt="Create isolated database container form" width="100%"><br><strong>Database container provisioning</strong></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Architecture
 
 ```mermaid
