@@ -3253,8 +3253,7 @@ function openProvisionDbDialog(serverId) {
 function updateProvisionUrlFormat() {
   const engine = document.getElementById("provisionEngine").value;
   const server = state.remoteServers.find((item) => item.id === state.provisionServerId);
-  const rawHost = String(server?.host || "SERVER_HOST");
-  const host = rawHost.includes(":") && !rawHost.startsWith("[") ? `[${rawHost}]` : rawHost;
+  const host = "SERVER_HOST";
   const port = document.getElementById("provisionPort").value || "PORT";
   const database = encodeURIComponent(document.getElementById("provisionDbName").value.trim() || "DATABASE");
   const user = encodeURIComponent(document.getElementById("provisionDbUser").value.trim() || "USER");
