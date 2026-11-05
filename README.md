@@ -64,6 +64,14 @@ flowchart LR
 
 Monitoring coverage varies by engine and permission level. Registration confirms connectivity; it does not prove that a database account is read-only. Snapshot and restore operations currently support PostgreSQL only. Restore can create a new database, or explicitly apply a snapshot to an existing target; the latter changes that database and requires confirmation.
 
+### Migration history and alerts
+
+The migration history panel reads existing PostgreSQL migration ledgers using read-only queries. It currently recognizes Flyway, Liquibase, Prisma, Django, Alembic, Rails, and Sequelize. Migration history discovery does not run, edit, or revert migrations. It does not currently cover MongoDB, MySQL/MariaDB, or Redis.
+
+The background monitor polls registered PostgreSQL targets about every two minutes. On its first successful scan of a target, it records the existing migration rows as a baseline and does not alert for those rows. Later newly observed rows can trigger a Telegram notification. Alerts require Telegram notifications to be enabled, a configured bot and recipient, and the `migration_detected` event to be enabled. The database account must be able to read the relevant migration ledger. A custom or unrecognized migration ledger will not be detected.
+
+There is no generic safe way for DBOps to reverse a migration based only on its history row. Rollback needs the migration project's original code and its framework-specific down/undo logic; data deleted or overwritten by a migration may not be recoverable from that logic. Use the owning migration tool and review and test its rollback in a suitable environment. For shared or production databases, prefer a reviewed corrective migration or a verified backup restore plan. DBOps does not expose a one-click migration rollback.
+
 ## Quick start
 
 ### Docker Compose
@@ -122,6 +130,8 @@ The versioned API is rooted at `/api/v1`. Protected endpoints accept an authenti
 | Restore | `POST /restores` |
 | Storage and remote servers | `/storage/targets`, `/servers` |
 | Actions | `POST /actions/ping`, `POST /actions/kill-query` |
+
+Remote server provisioning creates a new isolated container and data directory for PostgreSQL, MongoDB, MySQL/MariaDB, or Redis. Before creation, DBOps checks the selected host port against Docker-published ports and host TCP listeners, then checks again immediately before starting the container. This is a point-in-time check; another process could bind the port afterward, so Docker's final bind remains authoritative. Existing containers are not stopped or reconfigured by this workflow.
 
 ## Project layout
 
