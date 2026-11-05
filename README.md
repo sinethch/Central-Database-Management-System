@@ -38,16 +38,24 @@ DBOps brings common operational workflows into one self-hosted dashboard and API
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/console.png" alt="DBOps console showing registered database targets" width="100%"><br><strong>Console and database targets</strong></td>
-    <td align="center"><img src="docs/images/server-management.png" alt="Remote server management and health" width="100%"><br><strong>Remote server management</strong></td>
+    <td align="center"><img src="docs/images/console.png" alt="DBOps console showing registered database targets" width="100%"><br><strong>Console and database targets</strong><br>Choose the active database and open common operations from the central dashboard.</td>
+    <td align="center"><img src="docs/images/server-management.png" alt="Remote server management and health" width="100%"><br><strong>Remote server management</strong><br>Review registered host health and the containers managed by DBOps.</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/overview-migrations.png" alt="Overview dashboard with migration history" width="100%"><br><strong>Overview and migration history</strong></td>
-    <td align="center"><img src="docs/images/restored-databases.png" alt="Restored databases page" width="100%"><br><strong>Restored databases</strong></td>
+    <td align="center"><img src="docs/images/overview-migrations.png" alt="Overview dashboard with migration history" width="100%"><br><strong>Overview and migration history</strong><br>Inspect PostgreSQL health metrics and the migration records visible to the app.</td>
+    <td align="center"><img src="docs/images/restored-databases.png" alt="Restored databases page" width="100%"><br><strong>Restored databases</strong><br>Find databases created by clone restores and manage their target registration.</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/container-provisioning.png" alt="Create isolated database container form" width="100%"><br><strong>Database container provisioning</strong></td>
-    <td></td>
+    <td align="center"><img src="docs/images/container-provisioning.png" alt="Create isolated database container form" width="100%"><br><strong>Database container provisioning</strong><br>Configure a new isolated database container, check its server port, and preview its connection URL.</td>
+    <td align="center"><img src="docs/images/activity-feed.png" alt="Operations activity feed" width="100%"><br><strong>Operations activity</strong><br>Review recent operator and system events in chronological order.</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/notification-settings.png" alt="Telegram notification settings" width="100%"><br><strong>Notification settings</strong><br>Configure Telegram delivery, recipients, event subscriptions, and test messages.</td>
+    <td align="center"><img src="docs/images/restore-workflow.png" alt="Restore snapshot workflow" width="100%"><br><strong>Restore workflow</strong><br>Select a snapshot, destination server, and whether to create a new database or target an existing one.</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/sign-in.png" alt="DBOps operator sign-in page" width="100%"><br><strong>Operator sign-in</strong><br>Authenticate to the control plane with an operator account.</td>
+    <td align="center"><img src="docs/images/user-management.png" alt="Application user management" width="100%"><br><strong>User management</strong><br>Administrators can create or remove accounts, assign roles, and enable MFA.</td>
   </tr>
 </table>
 
