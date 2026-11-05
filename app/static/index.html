@@ -763,12 +763,13 @@
       <div class="form-group"><label for="provisionEngine">Database engine</label><select id="provisionEngine" class="form-control"><option value="postgres">PostgreSQL</option><option value="mongodb">MongoDB</option><option value="mysql">MySQL / MariaDB</option><option value="redis">Redis</option></select></div>
       <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>
       <div class="form-group"><label for="provisionContainerName">Docker container name</label><input id="provisionContainerName" class="form-control mono" value="dbops-postgres" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" required><small class="field-hint">Letters, numbers, dots, underscores, and hyphens; must be unique on this server.</small></div>
-      <div class="form-group"><label for="provisionDbName">Database name</label><input id="provisionDbName" class="form-control mono" value="appdb"></div>
-      <div class="form-group"><label for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"></div>
-      <div class="form-group"><label for="provisionDbPassword">Database password (16+ characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"></div>
+      <div class="form-group" id="provisionDbNameGroup"><label id="provisionDbNameLabel" for="provisionDbName">Database name</label><input id="provisionDbName" class="form-control mono" value="appdb"></div>
+      <div class="form-group" id="provisionDbUserGroup"><label id="provisionDbUserLabel" for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"></div>
+      <div class="form-group" id="provisionDbPasswordGroup"><label id="provisionDbPasswordLabel" for="provisionDbPassword">Database password (16+ characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"></div>
       <div class="form-group"><label for="provisionPort">Server port</label><input id="provisionPort" class="form-control" type="number" value="55432" min="1024" max="65535"></div>
+      <div class="form-group"><label>Port availability</label><div id="provisionPortStatus" class="readonly-value" role="status" aria-live="polite">Select a server port to check.</div></div>
+      <div class="form-group form-grid-full"><label>Connection URL preview</label><div id="provisionUrlFormat" class="readonly-value mono">postgresql://dbops:PASSWORD@SERVER_HOST:55432/appdb</div><small class="field-hint">The preview updates as you enter values. Reserved characters in credentials are percent-encoded.</small></div>
       <div class="form-group"><label for="provisionImage">Container image</label><input id="provisionImage" class="form-control mono" value="postgres:16-alpine"><small class="field-hint">Supported image tags: postgres:16-alpine, mongo:7, mysql:8, mariadb:11.4, redis:7-alpine.</small></div>
-      <div class="form-group form-grid-full"><label for="provisionImageArchive">Load PostgreSQL image from archive (optional)</label><div class="server-inline-form"><input id="provisionImageArchive" class="form-control" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip"><button class="btn btn-secondary btn-sm" type="button" data-action="upload-postgres-image">Upload PostgreSQL image</button></div></div>
     </div>
     <small class="field-hint">After creation, the new database is selected under Targets. Click its masked connection URL in the Console toolbar to copy the full URL. The server port must be reachable by teammates who connect from outside this application.</small>
     <div class="dialog-actions"><div class="dialog-actions-right"><button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="provisionDbDialog">Cancel</button><button type="button" class="btn btn-primary-gradient" data-action="provision-database">Create New Container</button></div></div>
@@ -1083,6 +1084,6 @@
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=74"></script>
+  <script defer src="/static/app.js?v=75"></script>
 </body>
 </html>

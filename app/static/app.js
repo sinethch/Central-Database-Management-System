@@ -3227,12 +3227,75 @@ function openProvisionDbDialog(serverId) {
     document.getElementById("provisionPort").value = port;
     document.getElementById("provisionContainerName").value = container;
     document.getElementById("provisionDbTitle").textContent = `Create Isolated ${engineSelect.selectedOptions[0].text} Container`;
-    document.getElementById("provisionImageArchive").closest(".form-group").hidden = engineSelect.value !== "postgres";
+    const redis = engineSelect.value === "redis";
+    document.getElementById("provisionDbNameGroup").hidden = redis;
+    document.getElementById("provisionDbUserGroup").hidden = redis;
+    document.getElementById("provisionDbName").required = !redis;
+    document.getElementById("provisionDbUser").required = !redis;
+    document.getElementById("provisionDbPasswordLabel").textContent = redis ? "Redis password (16+ characters)" : "Database password (16+ characters)";
+    updateProvisionUrlFormat();
+    checkProvisionPort();
   };
-  engineSelect.onchange = updateEngine;
+  engineSelect.addEventListener("change", updateEngine);
+  const portInput = document.getElementById("provisionPort");
+  portInput.oninput = () => { updateProvisionUrlFormat(); checkProvisionPort(); };
+  ["provisionDbName", "provisionDbUser", "provisionDbPassword"].forEach((id) => {
+    document.getElementById(id).oninput = updateProvisionUrlFormat;
+  });
+  portInput.onchange = checkProvisionPort;
+  portInput.onblur = checkProvisionPort;
   updateEngine();
+  updateProvisionUrlFormat();
   document.getElementById("provisionServerLabel").textContent = `${server.name} (${maskedSshAddress(server)}) · creates a new container and data directory only`;
   openDialog("provisionDbDialog");
+}
+
+function updateProvisionUrlFormat() {
+  const engine = document.getElementById("provisionEngine").value;
+  const server = state.remoteServers.find((item) => item.id === state.provisionServerId);
+  const rawHost = String(server?.host || "SERVER_HOST");
+  const host = rawHost.includes(":") && !rawHost.startsWith("[") ? `[${rawHost}]` : rawHost;
+  const port = document.getElementById("provisionPort").value || "PORT";
+  const database = encodeURIComponent(document.getElementById("provisionDbName").value.trim() || "DATABASE");
+  const user = encodeURIComponent(document.getElementById("provisionDbUser").value.trim() || "USER");
+  const password = encodeURIComponent(document.getElementById("provisionDbPassword").value || "PASSWORD");
+  const userOrPlaceholder = document.getElementById("provisionDbUser").value.trim() ? user : "USER";
+  const databaseOrPlaceholder = document.getElementById("provisionDbName").value.trim() ? database : "DATABASE";
+  const formats = {
+    postgres: `postgresql://${userOrPlaceholder}:${password}@${host}:${port}/${databaseOrPlaceholder}`,
+    mongodb: `mongodb://${userOrPlaceholder}:${password}@${host}:${port}/${databaseOrPlaceholder}?authSource=admin`,
+    mysql: `mysql://${userOrPlaceholder}:${password}@${host}:${port}/${databaseOrPlaceholder}`,
+    redis: `redis://:${password}@${host}:${port}/0`,
+  };
+  document.getElementById("provisionUrlFormat").textContent = formats[engine] || formats.postgres;
+}
+
+let provisionPortCheckTimer;
+async function checkProvisionPort() {
+  updateProvisionUrlFormat();
+  const status = document.getElementById("provisionPortStatus");
+  const serverId = state.provisionServerId;
+  const port = Number(document.getElementById("provisionPort").value);
+  if (!serverId || !Number.isInteger(port) || port < 1024 || port > 65535) {
+    status.textContent = "Enter a port from 1024 to 65535.";
+    status.dataset.state = "unknown";
+    return;
+  }
+  clearTimeout(provisionPortCheckTimer);
+  status.textContent = "Checking server…";
+  status.dataset.state = "checking";
+  const checkedPort = port;
+  provisionPortCheckTimer = setTimeout(async () => {
+    try {
+      const result = await api(`/api/v1/servers/${encodeURIComponent(serverId)}/ports/${checkedPort}`);
+      if (serverId !== state.provisionServerId || checkedPort !== Number(document.getElementById("provisionPort").value)) return;
+      status.textContent = result.available ? `Port ${checkedPort} is free.` : `Port ${checkedPort} is in use by ${result.users.join(", ") || "a running container"}.`;
+      status.dataset.state = result.available ? "free" : "used";
+    } catch (err) {
+      status.textContent = `Could not check port: ${err.message}`;
+      status.dataset.state = "unknown";
+    }
+  }, 300);
 }
 
 async function provisionPostgresContainer() {
@@ -3243,9 +3306,17 @@ async function provisionPostgresContainer() {
   const databaseUser = document.getElementById("provisionDbUser").value.trim();
   const databasePassword = document.getElementById("provisionDbPassword").value;
   const image = document.getElementById("provisionImage").value.trim();
+  const portStatus = document.getElementById("provisionPortStatus");
+  const hostPort = Number(document.getElementById("provisionPort").value);
+  if (!Number.isInteger(hostPort) || hostPort < 1024 || hostPort > 65535 || portStatus.dataset.state === "used" || portStatus.dataset.state !== "free") {
+    showToast("Choose a valid server port and wait for its availability check to confirm it is free.", "warning");
+    checkProvisionPort();
+    return;
+  }
   const imagePatterns = { postgres: /^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/, mongodb: /^mongo:(6|7|8)(\.\d+)?(-[a-z0-9.-]+)?$/, mysql: /^(mysql:8(\.\d+)?|mariadb:10\.\d+|mariadb:11\.\d+)(-[a-z0-9.-]+)?$/, redis: /^redis:([7-9]|[1-9][0-9])(\.\d+)?(-[a-z0-9.-]+)?$/ };
-  if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser) || databasePassword.length < 16 || !imagePatterns[engine]?.test(image)) {
-    showToast("Provide valid names, a supported image for the selected engine, and a database password of at least 16 characters.", "warning"); return;
+  const hasDatabaseFields = engine !== "redis";
+  if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || (hasDatabaseFields && (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser))) || databasePassword.length < 16 || !imagePatterns[engine]?.test(image)) {
+    showToast(`Provide a valid label and container name, ${hasDatabaseFields ? "database name and user, " : ""}a supported image, and a password of at least 16 characters.`, "warning"); return;
   }
   const btn = document.querySelector('[data-action="provision-database"]');
   setBusy(btn, true, "Creating container…");
@@ -3256,7 +3327,7 @@ async function provisionPostgresContainer() {
     const response = await fetch(`/api/v1/servers/${encodeURIComponent(state.provisionServerId)}/containers/${engine}/stream`, {
       method: "POST", headers: getHeaders(), body: JSON.stringify({
       server_id: state.provisionServerId, engine, name, container_name: containerName, database_name: databaseName, database_user: databaseUser,
-      database_password: databasePassword, host_port: Number(document.getElementById("provisionPort").value), image,
+      database_password: databasePassword, host_port: hostPort, image,
       }),
     });
     if (!response.ok) {
@@ -3340,31 +3411,6 @@ function closeServerOperationOutput() {
   const panel = document.getElementById("serverLiveConsole");
   if (panel) panel.hidden = true;
   panel?.parentElement?.classList.remove("has-live-output");
-}
-
-async function uploadPostgresImageArchive() {
-  const fileInput = document.getElementById("provisionImageArchive");
-  const file = fileInput?.files?.[0];
-  const image = document.getElementById("provisionImage")?.value.trim();
-  if (!state.provisionServerId || !file) { showToast("Choose a Docker image archive first.", "warning"); return; }
-  if (file.size > 2 * 1024 * 1024 * 1024) { showToast("The image archive exceeds the 2 GiB upload limit.", "warning"); return; }
-  if (!/^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/.test(image)) { showToast("Enter a supported PostgreSQL image tag that matches the archive.", "warning"); return; }
-  const button = document.querySelector('[data-action="upload-postgres-image"]');
-  setBusy(button, true, "Uploading image…");
-  clearServerOperationOutput();
-  setServerOperationStatus("Uploading", "badge-info");
-  appendServerOperationLine(`Uploading ${file.name} and loading ${image} on the remote server`, "info");
-  try {
-    const body = new FormData();
-    body.append("archive", file, file.name);
-    const query = new URLSearchParams({ image });
-    const data = await api(`/api/v1/servers/${encodeURIComponent(state.provisionServerId)}/images/postgres?${query}`, { method: "POST", body });
-    setServerOperationStatus("Complete", "badge-success");
-    appendServerOperationLine(`Image ${data.image} loaded on the remote server`, "success");
-    showToast(`Loaded ${data.image} on the remote server. You can now create the container.`, "success", { timeout: 8000 });
-    fileInput.value = "";
-  } catch (err) { setServerOperationStatus("Failed", "badge-danger"); appendServerOperationLine(err.message, "error"); showToast(`Image upload failed: ${err.message}`, "error", { timeout: 10000 }); }
-  finally { setBusy(button, false); }
 }
 
 const scheduleWeekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -3721,7 +3767,6 @@ function handleAction(action, el) {
     case "provision-database": provisionPostgresContainer(); break;
     case "clear-server-output": clearServerOperationOutput(); break;
     case "close-server-output": closeServerOperationOutput(); break;
-    case "upload-postgres-image": uploadPostgresImageArchive(); break;
     case "open-users": openUserManagement(); break;
     case "delete-user": deleteUserAccount(el.dataset.username); break;
     case "open-command": openCommandPalette(); break;
@@ -4385,4 +4430,4 @@ function startApp() {
   startAutoRefresh();
 }
 
-ready(init);
+ready(init);

@@ -3,7 +3,7 @@ import ipaddress
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import verify_api_key
@@ -12,42 +12,6 @@ from app.services.database_registry import database_registry
 from app.services.server_service import server_service
 
 router = APIRouter(prefix="/servers", tags=["Remote Database Servers"])
-MAX_POSTGRES_IMAGE_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024
-
-
-@router.post("/{server_id}/images/postgres", dependencies=[Depends(verify_api_key)])
-async def load_postgres_image_archive(
-    server_id: str,
-    image: str = Query(..., pattern=r"^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$"),
-    archive: UploadFile = File(...),
-):
-    """Upload a Docker save archive and load its tagged PostgreSQL image on the server."""
-    server = server_service.get(server_id)
-    if not server:
-        raise HTTPException(status_code=404, detail="Server was not found.")
-    filename = (archive.filename or "").lower()
-    if not filename.endswith((".tar", ".tar.gz", ".tgz")):
-        raise HTTPException(status_code=400, detail="Choose a Docker image archive (.tar, .tar.gz, or .tgz).")
-    size = 0
-    while chunk := await archive.read(1024 * 1024):
-        size += len(chunk)
-        if size > MAX_POSTGRES_IMAGE_ARCHIVE_BYTES:
-            await archive.close()
-            raise HTTPException(status_code=413, detail="Docker image archive exceeds the 2 GiB upload limit.")
-    if size == 0:
-        await archive.close()
-        raise HTTPException(status_code=400, detail="The selected image archive is empty.")
-    await archive.seek(0)
-    try:
-        return await asyncio.to_thread(server_service.load_postgres_image_archive, server_id, archive.file, image)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-    finally:
-        await archive.close()
-
-
 @router.get("", response_model=ServerListResponse, dependencies=[Depends(verify_api_key)])
 async def list_servers():
     servers = server_service.list()
@@ -119,6 +83,18 @@ async def list_managed_containers(server_id: str):
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Could not list managed containers: {exc}")
+
+
+@router.get("/{server_id}/ports/{host_port}", dependencies=[Depends(verify_api_key)])
+async def check_database_port(server_id: str, host_port: int):
+    if host_port < 1024 or host_port > 65535:
+        raise HTTPException(status_code=400, detail="Choose a port from 1024 to 65535.")
+    try:
+        return await asyncio.to_thread(server_service.check_database_port, server_id, host_port)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not check server port: {exc}")
 
 
 @router.delete("/{server_id}/containers/{container_name}", dependencies=[Depends(verify_api_key)])

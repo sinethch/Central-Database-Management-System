@@ -282,6 +282,21 @@ class ServerService:
         self._save(rows)
         return self.public(draft)
 
+    def check_database_port(self, server_id: str, host_port: int) -> Dict[str, Any]:
+        """Read-only check for a host port using Docker's published-port inventory."""
+        row = self.get(server_id)
+        if not row:
+            raise FileNotFoundError("Server was not found.")
+        client = self.connect(row)
+        try:
+            containers = self._exec(client, ["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Ports}}"])
+            matches = [line for line in containers.splitlines() if line.strip() and any(f":{host_port}->" in binding for binding in line.split("\t", 1)[-1].split(", "))]
+            listeners = self._exec(client, ["sh", "-lc", f"if command -v ss >/dev/null 2>&1; then ss -H -ltn 'sport = :{host_port}'; elif command -v netstat >/dev/null 2>&1; then netstat -ltn 2>/dev/null | awk '$4 ~ /:{host_port}$/'; else true; fi"])
+            users = matches + ([f"Host process: {line.strip()}" for line in listeners.splitlines() if line.strip()])
+            return {"port": host_port, "available": not users, "users": users}
+        finally:
+            client.close()
+
     def create_database_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: Optional[str], progress: Optional[Callable[[str], None]] = None, engine: str = "postgres") -> Dict[str, Any]:
         """Provision an isolated database container with fresh data and a protected password file."""
         configs = {
@@ -312,6 +327,13 @@ class ServerService:
         report = progress or (lambda _message: None)
         try:
             report(f"Connecting to {row['host']} over SSH")
+            # Inspect through this connection so the SSH session stays consistent.
+            containers = self._exec(client, ["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Ports}}"])
+            matches = [line for line in containers.splitlines() if line.strip() and any(f":{host_port}->" in binding for binding in line.split("\t", 1)[-1].split(", "))]
+            listeners = self._exec(client, ["sh", "-lc", f"if command -v ss >/dev/null 2>&1; then ss -H -ltn 'sport = :{host_port}'; elif command -v netstat >/dev/null 2>&1; then netstat -ltn 2>/dev/null | awk '$4 ~ /:{host_port}$/'; else true; fi"])
+            port_check = {"available": not (matches or listeners.strip())}
+            if not port_check["available"]:
+                raise ValueError(f"Server port {host_port} is already published by a running Docker container. Choose another port.")
             try:
                 self._exec(client, ["docker", "image", "inspect", image], timeout=20)
                 report(f"Image {image} is already available locally")
@@ -408,42 +430,6 @@ class ServerService:
             self._exec(client, ["docker", "rm", "--force", container_name])
             return True
         finally:
-            client.close()
-
-    def load_postgres_image_archive(self, server_id: str, archive, image: str) -> Dict[str, str]:
-        """Transfer a Docker save archive to a registered host and load its PostgreSQL image."""
-        row = self.get(server_id)
-        if not row:
-            raise FileNotFoundError("Server was not found.")
-        client = self.connect(row)
-        remote_dir = posixpath.join(row["database_root"], ".images")
-        remote_archive = posixpath.join(remote_dir, "postgres-" + uuid.uuid4().hex + ".tar")
-        try:
-            sftp = client.open_sftp()
-            try:
-                self._mkdirs(sftp, remote_dir, row["database_root"])
-                archive.seek(0)
-                with sftp.open(remote_archive, "wx") as remote_file:
-                    while block := archive.read(1024 * 1024):
-                        remote_file.write(block)
-            finally:
-                sftp.close()
-            self._exec(client, ["docker", "load", "--input", remote_archive], timeout=600)
-            self._exec(client, ["docker", "image", "inspect", image], timeout=20)
-            return {"server_id": server_id, "image": image, "status": "loaded"}
-        except RuntimeError as exc:
-            raise RuntimeError(f"Could not load PostgreSQL image archive on the remote server: {exc}") from exc
-        finally:
-            try:
-                sftp = client.open_sftp()
-                try:
-                    sftp.remove(remote_archive)
-                except OSError:
-                    pass
-                finally:
-                    sftp.close()
-            except Exception:
-                pass
             client.close()
 
     def copy_snapshot(self, server_id: str, backup_id: str) -> Dict[str, Any]:
