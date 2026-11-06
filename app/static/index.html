@@ -34,7 +34,7 @@
   <link rel="stylesheet" media="print" onload="this.media='all'"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 
-  <link rel="stylesheet" href="/static/style.css?v=74">
+  <link rel="stylesheet" href="/static/style.css?v=81">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><path d='M12 2C6.48 2 2 4.02 2 6.5v11C2 19.98 6.48 22 12 22s10-2.02 10-4.5v-11C22 4.02 17.52 2 12 2zm0 2c4.42 0 8 1.57 8 2.5S16.42 9 12 9s-8-1.57-8-2.5S7.58 4 12 4zm0 16c-4.42 0-8-1.57-8-2.5v-2.31c2.14 1.15 5.04 1.81 8 1.81s5.86-.66 8-1.81v2.31c0 .93-3.58 2.5-8 2.5zm0-5c-4.42 0-8-1.57-8-2.5v-2.31c2.14 1.15 5.04 1.81 8 1.81s5.86-.66 8-1.81v2.31c0 .93-3.58 2.5-8 2.5z'/></svg>">
 </head>
 <body>
@@ -320,6 +320,10 @@
           </div>
         </div>
         <div class="db-selector-right">
+          <label class="section-target-switcher">
+            <span>Active target</span>
+            <select class="target-section-select" aria-label="Switch active database target" disabled><option value="">Loading targets…</option></select>
+          </label>
           <div class="search-box" id="dbSearchWrap" hidden>
             <input type="search" id="dbSearchInput" class="search-input" placeholder="Filter targets..." aria-label="Filter database targets">
           </div>
@@ -363,6 +367,12 @@
 
     <!-- workspace:overview:start -->
     <!-- Metrics -->
+    <div class="section-target-bar">
+      <label class="section-target-switcher">
+        <span>Active target</span>
+        <select class="target-section-select" aria-label="Switch active database target" disabled><option value="">Loading targets…</option></select>
+      </label>
+    </div>
     <section class="grid-metrics" aria-label="Key metrics">
       <article class="card interactive-card reveal">
         <div class="card-head">
@@ -375,18 +385,6 @@
         <div id="recentMigrationVal" class="card-value recent-migration-value">Checking…</div>
         <div id="recentMigrationMeta" class="card-footnote">Looking for a recognized migration record</div>
         <div id="recentMigrationFootnote" class="card-footnote">Refresh migration history to check for newer entries.</div>
-      </article>
-
-      <article class="card interactive-card reveal">
-        <div class="card-head">
-          <div class="card-icon tile-green" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
-          <span class="card-title" title="Shared-buffer hits divided by shared-buffer hits plus read requests. PostgreSQL read requests can sometimes be served by the operating system cache, so they do not always mean physical disk access. The card value is cumulative since database statistics were reset. This is a cache efficiency metric, not an overall database health check.">Buffer Cache Hit Ratio</span>
-          <span id="cacheBadge" class="badge badge-info">Cache status</span>
-        </div>
-        <div id="cacheHitVal" class="card-value">--%</div>
-        <div id="cacheVisualization" class="metric-visual cache-visual" aria-label="Buffer cache hit ratio chart"></div>
       </article>
 
       <article class="card interactive-card reveal">
@@ -505,6 +503,10 @@
             <p class="section-subtitle">Create, verify, and manage PostgreSQL snapshots. Snapshot creation can add database and storage load. Deleting a snapshot removes only this app's local archive and list entry; repository and remote-server copies stay intact.</p>
           </div>
           <div class="header-actions">
+            <label class="section-target-switcher">
+              <span>Active target</span>
+              <select class="target-section-select" aria-label="Switch active database target" disabled><option value="">Loading targets…</option></select>
+            </label>
             <button class="btn btn-secondary btn-sm" data-action="open-schedule" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-clock"/></svg> Backup Schedule</button>
             <button class="btn btn-sm btn-primary-gradient" data-action="open-backup" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-plus"/></svg> Take Snapshot</button>
           </div>
@@ -1084,6 +1086,6 @@
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=76"></script>
+  <script defer src="/static/app.js?v=86"></script>
 </body>
 </html>

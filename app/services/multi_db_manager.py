@@ -408,12 +408,28 @@ class MultiDatabaseManager:
                 r = redis.from_url(url, socket_timeout=3)
                 info = r.info()
                 used_bytes = info.get("used_memory", 0)
-                dbsize = r.dbsize()
+                max_memory_bytes = info.get("maxmemory", 0)
+                keyspace = info.get("keyspace", {})
+                db_key_counts = {}
+                for db_name, db_stats in keyspace.items():
+                    try:
+                        db_key_counts[db_name] = int(db_stats.get("keys", 0))
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                dbsize = db_key_counts.get("db0", 0)
+                eviction_policy = info.get("maxmemory_policy", "unknown")
                 r.close()
                 return {
                     "database_name": "redis_db0",
                     "total_bytes": used_bytes,
                     "total_human": _human_size(used_bytes),
+                    "memory_limit_bytes": max_memory_bytes,
+                    "key_count": dbsize,
+                    "total_key_count": sum(db_key_counts.values()),
+                    "db_key_counts": db_key_counts,
+                    "memory_fragmentation_ratio": info.get("mem_fragmentation_ratio"),
+                    "evicted_keys": info.get("evicted_keys", 0),
+                    "eviction_policy": eviction_policy,
                     "tables": [{
                         "schema_name": "keyspace",
                         "table_name": f"db0 ({dbsize} keys)",

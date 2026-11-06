@@ -50,6 +50,7 @@ const state = {
   filter: "",
   autoRefresh: readAutoRefreshPreference(),
   refreshing: false,
+  refreshPending: false,
   backupBusy: false,
   lastHealthConnected: true,
   lastSlowCount: 0,
@@ -60,7 +61,6 @@ const state = {
   remoteServers: [],
   provisionServerId: null,
   latencyHistory: [12, 14, 11, 15, 13, 16, 12, 10, 14, 11, 13, 12],
-  cacheMetric: null,
   sizeMetric: null,
   slowMetric: null,
   deadlockMetric: null,
@@ -654,7 +654,6 @@ function buildSparkline(values, { width = 96, height = 26, stroke = "var(--accen
    Metric-specific visualizations with hover details
    ------------------------------------------------------------------------- */
 function updateMetricVisualizations() {
-  renderCacheVisualization();
   renderSizeVisualization();
   renderSlowQueryVisualization();
 }
@@ -822,29 +821,6 @@ function renderBackupSizeTrend() {
       </div>`;
 }
 
-function renderCacheVisualization() {
-  const el = document.getElementById("cacheVisualization");
-  if (!el) return;
-  const data = state.cacheMetric;
-  if (!data) { el.innerHTML = `<div class="viz-empty">Waiting for cache metrics…</div>`; return; }
-  const ratio = Math.max(0, Math.min(100, Number(data.buffer_cache_hit_ratio) || 0));
-  const threshold = Number(data.threshold_percent) || 95;
-  const hits = Number(data.blocks_hit) || 0;
-  const reads = Number(data.blocks_read) || 0;
-  const color = ratio >= threshold ? "var(--ok)" : "var(--warn)";
-  el.innerHTML = `<div class="cache-visualization">
-    <div class="cache-scale-head"><span>Cache hit rate</span><strong>${ratio.toFixed(2)}%</strong></div>
-    <div class="cache-scale-labels" style="--cache-target:${Math.min(100, Math.max(0, threshold))}%"><span>0%</span><span>${threshold}% target</span><span>100%</span></div>
-    <div class="cache-scale-track" role="img" tabindex="0" aria-label="Buffer cache hit ratio ${ratio.toFixed(2)} percent; target ${threshold} percent" title="${hits.toLocaleString()} shared-buffer hits and ${reads.toLocaleString()} read requests since statistics reset">
-      <i class="cache-scale-fill" style="--cache-ratio:${ratio}%;--cache-color:${color}"></i>
-      <b class="cache-scale-target" style="--cache-target:${Math.min(100, Math.max(0, threshold))}%"></b>
-      <b class="cache-scale-point" style="--cache-ratio:${ratio}%;--cache-color:${color}"></b>
-    </div>
-    <div class="cache-counts"><span><i class="cache-count-dot hit"></i>Shared-buffer hits <strong>${hits.toLocaleString()}</strong></span><span><i class="cache-count-dot read"></i>Read requests <strong>${reads.toLocaleString()}</strong></span></div>
-    <small class="cache-scale-note">Cumulative counts since PostgreSQL statistics were reset</small>
-  </div>`;
-}
-
 function renderSizeVisualization() {
   const el = document.getElementById("sizeVisualization");
   if (!el) return;
@@ -870,7 +846,7 @@ function renderSizeVisualization() {
         <span class="relation-scale">
           <span class="relation-stack-track" style="--bar-width:${pct.toFixed(2)}%">
             <i class="seg-table" style="--seg-table:${tableShare.toFixed(2)}%"></i>
-            <i class="seg-index" style="--seg-table:${tableShare.toFixed(2)}%;--seg-index:${indexShare.toFixed(2)}%"></i>
+            <i class="seg-index" style="--seg-index:${indexShare.toFixed(2)}%"></i>
           </span>
         </span>
         <strong>${escapeHtml(row.total_human || formatServerBytes(bytes))}</strong>
@@ -1581,6 +1557,7 @@ async function refreshDatabaseReachability() {
 
 function updateActiveToolbar() {
   const target = state.databases.find((d) => d.id === state.activeDatabaseId) || state.databases[0];
+  updateGlobalTargetSwitcher();
   if (!target) {
     const titleEl = document.getElementById("activeDbTitle");
     const badgeEl = document.getElementById("activeEngineBadge");
@@ -1631,21 +1608,38 @@ function updateActiveToolbar() {
   }
 }
 
+function updateGlobalTargetSwitcher() {
+  const selects = document.querySelectorAll(".target-section-select");
+  if (!selects.length) return;
+  const options = state.databases.length
+    ? state.databases.map((db) => `<option value="${escapeHtml(db.id)}">${escapeHtml(db.name)} · ${escapeHtml(engineMeta(db.engine).label)}</option>`).join("")
+    : '<option value="">No targets</option>';
+  selects.forEach((select) => {
+    select.innerHTML = options;
+    select.value = state.databases.some((db) => db.id === state.activeDatabaseId) ? state.activeDatabaseId : (state.databases[0]?.id || "");
+    select.disabled = state.databases.length < 2;
+  });
+}
+
 async function fetchRegisteredDatabases() {
   const container = document.getElementById("dbPillList");
   try {
     const data = await api("/api/v1/databases");
+    const previousActiveId = state.activeDatabaseId;
     state.databases = data.databases || [];
     state.databaseReachability = Object.fromEntries(
       Object.entries(state.databaseReachability).filter(([dbId]) => state.databases.some((db) => db.id === dbId))
     );
-    if (state.databases.length && !state.databases.some((d) => d.id === state.activeDatabaseId)) {
-      state.activeDatabaseId = state.databases[0].id;
+    if (state.databases.length && !state.databases.some((d) => d.id === state.activeDatabaseId)) state.activeDatabaseId = state.databases[0].id;
+    if (!state.databases.length) state.activeDatabaseId = "";
+    if (previousActiveId !== state.activeDatabaseId) {
+      state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
     }
     try { if (state.activeDatabaseId) localStorage.setItem("dbops_active_database", state.activeDatabaseId); } catch (e) { /* keep selection in memory */ }
     renderBrowseDatabaseOptions();
     renderDatabasePills();
     updateActiveToolbar();
+    updateMetricVisualizations();
     refreshDatabaseReachability();
     populateActivityDatabaseFilter();
   } catch (err) {
@@ -1653,12 +1647,20 @@ async function fetchRegisteredDatabases() {
     if (container) {
       container.innerHTML = `<span class="pill-placeholder">Failed to load targets — ${escapeHtml(err.message)}</span>`;
     }
+    state.databases = [];
+    state.activeDatabaseId = "";
+    updateActiveToolbar();
+    updateMetricVisualizations();
+    const statusText = document.getElementById("statusText");
+    const statusDot = document.getElementById("statusDot");
+    if (statusText) { statusText.textContent = "Target registry unavailable"; statusText.style.color = "var(--bad)"; }
+    if (statusDot) statusDot.className = "status-dot unhealthy";
     populateActivityDatabaseFilter();
   }
 }
 
 async function selectDatabase(dbId) {
-  state.cacheMetric = null; state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
+  state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
   updateMetricVisualizations();
   state.activeDatabaseId = dbId;
   try { localStorage.setItem("dbops_active_database", dbId); } catch (e) { /* keep selection in memory */ }
@@ -1861,7 +1863,7 @@ async function confirmUnregisterActiveDb(dbId = state.activeDatabaseId) {
     const fallback = state.databases.find((db) => db.id === "db-primary") || state.databases[0];
     if (removedActive) {
       state.activeDatabaseId = fallback ? fallback.id : "";
-      state.cacheMetric = null; state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
+      state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
       try {
         if (fallback) localStorage.setItem("dbops_active_database", fallback.id);
         else localStorage.removeItem("dbops_active_database");
@@ -2058,7 +2060,7 @@ async function fetchHealth() {
     } else {
       state.lastHealthConnected = false;
       if (dot) dot.className = "status-dot unhealthy";
-      if (text) { setValue(text, `${target ? target.name : "Target"} (Unreachable)`); text.style.color = "var(--bad)"; }
+    if (text) { setValue(text, target ? `${target.name} (Unreachable)` : "No monitoring target"); text.style.color = "var(--bad)"; }
       setValue(lat, "-- ms"); setValue(ver, "N/A"); setValue(up, "Down");
       if (data.error) console.warn("[DBOps] Health:", data.error);
     }
@@ -2067,7 +2069,16 @@ async function fetchHealth() {
     state.lastHealthConnected = false;
     const dot = document.getElementById("statusDot");
     if (dot) dot.className = "status-dot unhealthy";
-    setValue(document.getElementById("statusText"), "Control plane offline");
+    const text = document.getElementById("statusText");
+    const target = state.databases.find((d) => d.id === state.activeDatabaseId);
+    if (text) {
+      setValue(text, err.status === 0 ? "Control plane offline" : target ? `${target.name} (Health unavailable)` : "No monitoring target");
+      text.style.color = "var(--bad)";
+      text.title = err.message || "Health request failed";
+    }
+    setValue(document.getElementById("latencyVal"), "-- ms");
+    setValue(document.getElementById("versionVal"), "N/A");
+    setValue(document.getElementById("uptimeVal"), "--");
   }
 }
 
@@ -2108,31 +2119,6 @@ async function fetchMigrationHistory() {
     body.innerHTML = `<tr><td colspan="5" class="table-empty">History unavailable. Check the target connection and database user's read permissions.</td></tr>`;
     setSummary("History unavailable", "Check the target connection and database user's read permissions.", "Unavailable");
     if (summaryNote) summaryNote.textContent = "No schema inspection or migration changes were attempted.";
-  }
-}
-
-async function fetchCacheHit() {
-  try {
-    const data = await api(`/api/v1/metrics/cache-hit-ratio?db_id=${encodeURIComponent(state.activeDatabaseId)}`);
-    state.cacheMetric = data;
-    setValue(document.getElementById("cacheHitVal"), `${data.buffer_cache_hit_ratio}%`);
-    const badge = document.getElementById("cacheBadge");
-    if (badge) {
-      const threshold = Number(data.threshold_percent || 95);
-      badge.className = `badge ${data.is_healthy ? "badge-success" : "badge-warning"}`;
-      badge.innerHTML = data.is_healthy
-        ? `${icon("check", "ico-sm")}<span>Cache healthy</span>`
-        : `${icon("warning", "ico-sm")}<span>Below ${threshold}% cache target</span>`;
-      badge.title = data.is_healthy
-        ? `Cache hit ratio meets the ${threshold}% target. This describes cache efficiency, not overall database health.`
-        : `Cache hit ratio is below the ${threshold}% target. This describes cache efficiency, not overall database health.`;
-    }
-
-    updateMetricVisualizations();
-  } catch (err) {
-    console.error("[DBOps] cache:", err);
-    setValue(document.getElementById("cacheHitVal"), "--%");
-    state.cacheMetric = null; updateMetricVisualizations();
   }
 }
 
@@ -2873,7 +2859,7 @@ async function loadNotificationSettings() {
     if (recipientHint) {
       const recipients = cfg.telegram_recipients || [];
       recipientHint.innerHTML = recipients.length
-        ? recipients.map((id) => `<li><code>${escapeHtml(id)}</code></li>`).join("")
+        ? recipients.map((id) => `<li><code>${escapeHtml(maskTelegramChatId(id))}</code></li>`).join("")
         : '<li class="muted">No users have registered with /start yet.</li>';
     }
     const tokenInput = document.getElementById("notifyBotToken");
@@ -2887,6 +2873,14 @@ async function loadNotificationSettings() {
   } catch (err) {
     setStatusEl(statusEl, `Could not load settings: ${err.message}`, "err");
   }
+}
+
+function maskTelegramChatId(value) {
+  const id = String(value ?? "");
+  if (id.length <= 4) return "•".repeat(id.length);
+  const start = Math.max(1, Math.floor((id.length - 4) / 2));
+  const end = Math.min(id.length - 1, start + 4);
+  return `${id.slice(0, start)}${"•".repeat(end - start)}${id.slice(end)}`;
 }
 
 async function saveNotificationSettings() {
@@ -3698,12 +3692,14 @@ function markUpdated() {
 }
 
 async function refreshDashboard() {
-  if (state.refreshing) return;
+  if (state.refreshing) {
+    state.refreshPending = true;
+    return;
+  }
   state.refreshing = true;
   try {
     await Promise.allSettled([
       fetchHealth(),
-      fetchCacheHit(),
       fetchDbSize(),
       fetchSlowQueriesAndDeadlocks(),
       fetchBackups(),
@@ -3716,6 +3712,10 @@ async function refreshDashboard() {
     markUpdated();
   } finally {
     state.refreshing = false;
+    if (state.refreshPending) {
+      state.refreshPending = false;
+      queueMicrotask(() => refreshDashboard());
+    }
   }
 }
 
@@ -3872,6 +3872,10 @@ function registerEvents() {
   });
 
   document.addEventListener("change", (ev) => {
+    if (ev.target.matches(".target-section-select")) {
+      if (ev.target.value && ev.target.value !== state.activeDatabaseId) selectDatabase(ev.target.value);
+      return;
+    }
     if (ev.target.id === "restoreBackupSelect") updateRestoreBackupSelection(ev.target.value);
     if (ev.target.id === "restoreSourceDbSelect") renderRestoreBackupOptions(ev.target.value, "");
     if (["restoreMode", "restoreSourceServer"].includes(ev.target.id)) toggleRestoreMode();
@@ -4260,7 +4264,7 @@ window.addEventListener("storage", (event) => {
   if (!appStarted || !["dbops_active_database", "dbops_registry_changed"].includes(event.key)) return;
   if (event.key === "dbops_active_database") {
     state.activeDatabaseId = event.newValue || "db-primary";
-    state.cacheMetric = null; state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
+    state.sizeMetric = null; state.slowMetric = null; state.deadlockMetric = null;
     updateMetricVisualizations();
   }
   clearTimeout(registrySyncTimer);
@@ -4424,7 +4428,9 @@ function startApp() {
   }, 30000);
   setInterval(() => { if (!document.hidden && state.autoRefresh) refreshDatabaseReachability(); }, 30000);
   fetchRegisteredDatabases().then(async () => {
-    await Promise.allSettled([state.autoRefresh ? refreshDashboard() : Promise.resolve(), fetchMigrationHistory()]);
+    // Always load a first snapshot. The auto-refresh preference controls only
+    // the recurring timer, not whether the dashboard gets initial data.
+    await Promise.allSettled([refreshDashboard(), fetchMigrationHistory()]);
   });
   startAutoRefresh();
 }

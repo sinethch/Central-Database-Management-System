@@ -393,6 +393,15 @@ main.is-entering .section:nth-child(7) { transition-delay: 0.3s; }
 }
 
 .header-controls { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+.section-target-bar { display: flex; justify-content: flex-end; margin: -.35rem 0 .8rem; }
+.section-target-switcher { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .45rem .3rem .65rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-solid); }
+.section-target-switcher > span { color: var(--text-faint); font-size: .61rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.section-target-switcher select { width: min(210px, 24vw); min-width: 130px; padding: .32rem 1.5rem .32rem .3rem; border: 0; outline: 0; background: transparent; color: var(--text); color-scheme: dark; font: 500 .72rem/1.2 var(--font); text-overflow: ellipsis; }
+.section-target-switcher option { background: #101420; color: #e9edf4; }
+[data-theme="light"] .section-target-switcher select { color-scheme: light; }
+[data-theme="light"] .section-target-switcher option { background: #fff; color: #182235; }
+.section-target-switcher select:focus-visible { box-shadow: var(--ring); border-radius: 4px; }
+.section-target-switcher select:disabled { opacity: .7; }
 
 .refresh-control {
   display: flex;
@@ -2952,7 +2961,7 @@ html[data-page="data-browser"] #database-browser > .table-responsive { flex:1 1 
 .relation-stack-legend i { width: 9px; height: 9px; border-radius: 3px; background: var(--legend-color); box-shadow: 0 0 6px color-mix(in srgb, var(--legend-color) 45%, transparent); }
 .relation-stack-track {
   position: relative;
-  display: block;
+  display: flex;
   height: 9px;
   min-width: 3px;
   width: var(--bar-width, 100%);
@@ -2962,14 +2971,13 @@ html[data-page="data-browser"] #database-browser > .table-responsive { flex:1 1 
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
 }
 .relation-stack-track i {
-  position: absolute;
-  top: 0; bottom: 0;
+  position: relative;
   display: block;
-  transform-origin: left;
-  animation: chart-bar-in .7s cubic-bezier(.2, .8, .2, 1) both;
+  flex: 0 0 auto;
+  height: 100%;
 }
-.relation-stack-track i.seg-table { left: 0; width: var(--seg-table, 0%); background: linear-gradient(90deg, #818cf8, #38bdf8); }
-.relation-stack-track i.seg-index { left: var(--seg-table, 0%); width: var(--seg-index, 0%); background: linear-gradient(90deg, rgba(155, 123, 255, .9), rgba(56, 189, 248, .5)); }
+.relation-stack-track i.seg-table { width: var(--seg-table, 0%); background: linear-gradient(90deg, #818cf8, #38bdf8); }
+.relation-stack-track i.seg-index { width: var(--seg-index, 0%); background: linear-gradient(90deg, rgba(155, 123, 255, .9), rgba(56, 189, 248, .5)); }
 .relation-stack-track i.seg-table::after {
   content: "";
   position: absolute;
