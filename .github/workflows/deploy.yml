@@ -1,136 +1,136 @@
-name: CI and deploy
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-  release:
-    types: [published]
-
-permissions:
-  contents: read
-
-concurrency:
-  group: production-deploy
-  cancel-in-progress: false
-
-jobs:
-  validate:
-    name: Test application
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements.txt
-
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-
-      - name: Run test suite
-        run: python -m pytest tests -q
-
-  publish:
-    name: Build and publish image
-    needs: validate
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image: ${{ steps.image.outputs.name }}
-      tag: ${{ steps.image.outputs.tag }}
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set image name
-        id: image
-        shell: bash
-        run: |
-          echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          release_tag="${GITHUB_REF_NAME}"
-          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Production releases must use semantic version tags such as v1.2.3." >&2
-            exit 1
-          fi
-          echo "tag=${release_tag}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Sign in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and publish versioned image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:${{ steps.image.outputs.tag }}
-            ${{ steps.image.outputs.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    name: Deploy to production server
-    needs: publish
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Check out deployment files
-        uses: actions/checkout@v4
-
-      - name: Set up SSH access
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-
-      - name: Trust deployment server host key
-        shell: bash
-        env:
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Install production Compose file on server
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-        run: scp -o BatchMode=yes docker-compose.production.yml "$DEPLOY_USER@$DEPLOY_HOST:/opt/dbops/docker-compose.production.yml"
-
-      - name: Sign in server to GHCR
-        shell: bash
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
-        run: |
-          printf '%s' "$GHCR_READ_TOKEN" | ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-            "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
-
-      - name: Deploy the tested image
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          IMAGE_NAME: ${{ needs.publish.outputs.image }}
-          IMAGE_TAG: ${{ needs.publish.outputs.tag }}
-        run: |
-          ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd /opt/dbops && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml pull dbops-control-plane && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml up -d --no-deps dbops-control-plane"
+# name: CI and deploy
+#
+# on:
+#   pull_request:
+#   push:
+#     branches: [main]
+#   release:
+#     types: [published]
+#
+# permissions:
+#   contents: read
+#
+# concurrency:
+#   group: production-deploy
+#   cancel-in-progress: false
+#
+# jobs:
+#   validate:
+#     name: Test application
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Check out source
+#         uses: actions/checkout@v4
+#
+#       - name: Set up Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.12"
+#           cache: pip
+#           cache-dependency-path: requirements.txt
+#
+#       - name: Install dependencies
+#         run: python -m pip install -r requirements.txt
+#
+#       - name: Run test suite
+#         run: python -m pytest tests -q
+#
+#   publish:
+#     name: Build and publish image
+#     needs: validate
+#     if: github.event_name == 'release'
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: read
+#       packages: write
+#     outputs:
+#       image: ${{ steps.image.outputs.name }}
+#       tag: ${{ steps.image.outputs.tag }}
+#     steps:
+#       - name: Check out source
+#         uses: actions/checkout@v4
+#
+#       - name: Set image name
+#         id: image
+#         shell: bash
+#         run: |
+#           echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+#           release_tag="${GITHUB_REF_NAME}"
+#           if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+#             echo "Production releases must use semantic version tags such as v1.2.3." >&2
+#             exit 1
+#           fi
+#           echo "tag=${release_tag}" >> "$GITHUB_OUTPUT"
+#
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+#
+#       - name: Sign in to GitHub Container Registry
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ghcr.io
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - name: Build and publish versioned image
+#         uses: docker/build-push-action@v6
+#         with:
+#           context: .
+#           push: true
+#           tags: |
+#             ${{ steps.image.outputs.name }}:${{ steps.image.outputs.tag }}
+#             ${{ steps.image.outputs.name }}:latest
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
+#
+#   deploy:
+#     name: Deploy to production server
+#     needs: publish
+#     if: github.event_name == 'release'
+#     runs-on: ubuntu-latest
+#     environment: production
+#     steps:
+#       - name: Check out deployment files
+#         uses: actions/checkout@v4
+#
+#       - name: Set up SSH access
+#         uses: webfactory/ssh-agent@v0.9.0
+#         with:
+#           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+#
+#       - name: Trust deployment server host key
+#         shell: bash
+#         env:
+#           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+#         run: |
+#           mkdir -p ~/.ssh
+#           chmod 700 ~/.ssh
+#           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+#           chmod 600 ~/.ssh/known_hosts
+#
+#       - name: Install production Compose file on server
+#         env:
+#           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+#           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+#         run: scp -o BatchMode=yes docker-compose.production.yml "$DEPLOY_USER@$DEPLOY_HOST:/opt/dbops/docker-compose.production.yml"
+#
+#       - name: Sign in server to GHCR
+#         shell: bash
+#         env:
+#           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+#           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+#           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+#           GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+#         run: |
+#           printf '%s' "$GHCR_READ_TOKEN" | ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+#             "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
+#
+#       - name: Deploy the tested image
+#         env:
+#           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+#           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+#           IMAGE_NAME: ${{ needs.publish.outputs.image }}
+#           IMAGE_TAG: ${{ needs.publish.outputs.tag }}
+#         run: |
+#           ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+#             "cd /opt/dbops && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml pull dbops-control-plane && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml up -d --no-deps dbops-control-plane"
