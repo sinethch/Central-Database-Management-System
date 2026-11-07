@@ -137,6 +137,47 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
 - Remote server integration uses SSH and Docker. Access to a Docker daemon can provide root-level control of its host, so restrict the SSH account and network access.
 - Do not expose the management interface publicly without TLS, strong authentication, and appropriate network controls.
 
+## CI/CD deployment with GitHub Actions, GHCR, and Nginx
+
+The workflow in `.github/workflows/deploy.yml` runs the existing pytest suite for pull requests and pushes to `main`. To publish a production release, create and publish a GitHub Release with a semantic version tag such as `v1.2.3`. After CI passes, the workflow publishes versioned and `latest` tags to GitHub Container Registry (GHCR), then deploys the specific release version over SSH. Production does not deploy from `latest`. Configure a GitHub Actions environment named `production`; configure required reviewers there if production deployments need approval.
+
+### Prepare the Linux server once
+
+1. Install Docker Engine and the Docker Compose plugin. Create `/opt/dbops` and `/opt/dbops/ssh`, and give the deployment user access to Docker and write access to `/opt/dbops`. Docker group membership is root-equivalent, so restrict this user and its SSH key.
+2. Create `/opt/dbops/.env` on the server. Set the production database URL, a strong `API_KEY`, a unique `ADMIN_PASSWORD`, and stable unique encryption keys (`BACKUP_ENCRYPTION_KEY`, `DATABASE_CREDENTIAL_ENCRYPTION_KEY`, `AUTH_TOTP_ENCRYPTION_KEY`, and `SERVER_CREDENTIAL_ENCRYPTION_KEY`). Add any notification settings the deployment needs. Never copy the development `.env` or demo passwords into production.
+3. Keep a verified SSH `known_hosts` file at `/opt/dbops/ssh/known_hosts`. Set `SSH_KNOWN_HOSTS_PATH=./ssh/known_hosts` in the server `.env`, or adjust the bind source in `docker-compose.production.yml` to the trusted file’s absolute path.
+4. Point the domain's DNS `A` record (and `AAAA` if IPv6 is configured) at the server. Open inbound ports 80 and 443 (and restricted SSH) in the firewall; do not expose port 8080 publicly. Configure an Nginx site with a proxy to `http://127.0.0.1:8080`, forwarding the `Host`, `X-Real-IP`, `X-Forwarded-For`, and `X-Forwarded-Proto` headers. Allow long-running operations and streamed progress responses by setting appropriate proxy read timeouts and disabling buffering for the server provisioning stream endpoint. Validate and reload Nginx, then use Certbot with the Nginx plugin (`sudo certbot --nginx -d your-domain.example`) to issue the certificate and confirm automatic renewal is scheduled.
+5. Give the deployment user authenticated access to the GHCR package. The workflow signs in on the server using a classic GitHub token with `read:packages`; use a dedicated account/token with the narrowest available access and rotate it as required.
+
+### Configure GitHub Actions secrets
+
+Add these repository or `production` environment secrets under **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|---|---|
+| `DEPLOY_HOST` | Server DNS name or IP |
+| `DEPLOY_USER` | Restricted SSH deployment account |
+| `DEPLOY_SSH_KEY` | Private key for that account; add only its public key to the server |
+| `DEPLOY_KNOWN_HOSTS` | Verified known-hosts line for the server, collected and checked out of band |
+| `GHCR_USERNAME` | GitHub account that can pull the image |
+| `GHCR_READ_TOKEN` | Token with `read:packages` access to the image |
+
+Do not disable SSH host-key checking or use an unverified `ssh-keyscan` result as trust. After the first successful publication, set the GHCR package visibility and access so the deployment account can pull it.
+
+### Deployment and rollback
+
+Merge or push to `main` to run CI. Once ready to release, create a GitHub Release tagged with the next semantic version (`vMAJOR.MINOR.PATCH`, for example `v1.2.3`). Publishing the Release runs CI, builds and publishes the versioned image, then deploys that version. Review the Actions run and the server’s container health after deployment. The production Compose file exposes only localhost, leaving Nginx and Certbot on the host to serve HTTPS.
+
+To roll back, SSH to the server and run:
+
+```bash
+cd /opt/dbops
+IMAGE_NAME=ghcr.io/OWNER/REPOSITORY IMAGE_TAG=v1.2.2 docker compose -f docker-compose.production.yml pull dbops-control-plane
+IMAGE_NAME=ghcr.io/OWNER/REPOSITORY IMAGE_TAG=v1.2.2 docker compose -f docker-compose.production.yml up -d --no-deps dbops-control-plane
+```
+
+Replace the example with the image name and semantic version of a previous successful release. Keep the server `.env`, encryption keys, and named backup volume intact during rollback. Database migrations or data changes may need their own recovery plan; this workflow does not automatically roll back database state.
+
 ## API
 
 The versioned API is rooted at `/api/v1`. Protected endpoints accept an authenticated session or the configured `X-API-Key` header. API credentials belong in headers, never in URLs.
