@@ -779,12 +779,14 @@
       <div class="form-group"><label for="serverName">Server label</label><input id="serverName" class="form-control" placeholder="Backup host 1"></div>
       <div class="form-group"><label for="serverHost">Server IP address</label><input id="serverHost" class="form-control mono" placeholder="10.0.0.12"></div>
       <div class="form-group"><label for="serverSshPort">SSH port</label><input id="serverSshPort" class="form-control" type="number" value="22" min="1" max="65535"></div>
+      <div class="form-group form-grid-full"><button type="button" class="btn btn-secondary btn-sm" data-action="inspect-server-host-key">Inspect SSH host key</button><div id="serverHostKeyFingerprint" class="readonly-value mono" role="status">Inspect the host key before registering.</div></div>
+      <div class="form-group form-grid-full"><label class="new-user-mfa-label"><input type="checkbox" id="serverHostKeyVerified"><span>I verified this fingerprint with a trusted server/provider source.</span></label></div>
       <div class="form-group"><label for="serverUsername">SSH username</label><input id="serverUsername" class="form-control" autocomplete="username"></div>
       <div class="form-group"><label for="serverPassword">SSH password</label><input id="serverPassword" class="form-control" type="password" autocomplete="new-password"></div>
       <div class="form-group"><label for="serverDatabaseRoot">New database data root</label><input id="serverDatabaseRoot" class="form-control mono" value="/srv/dbops/databases"></div>
       <div class="form-group"><label for="serverBackupRoot">Snapshot directory</label><input id="serverBackupRoot" class="form-control mono" value="/srv/dbops/snapshots"></div>
     </div>
-    <small class="field-hint">SSH host identity is checked against the app's trusted known_hosts file. Enter absolute Linux paths; database and snapshot paths may be the same. Their parent directories must already exist; registration checks paths without creating remote files.</small>
+    <small class="field-hint">Compare the displayed SHA256 fingerprint with a trusted source before confirming. The app pins the accepted key in persistent storage and rejects changed keys. Enter absolute Linux paths; their parent directories must already exist.</small>
     <div class="dialog-actions"><div class="dialog-actions-right"><button type="button" class="btn btn-secondary" data-action="close-dialog" data-dialog="serverDialog">Cancel</button><button type="button" class="btn btn-primary-gradient" data-action="register-server">Register Server</button></div></div>
   </div></dialog>
 
@@ -1130,6 +1132,6 @@
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=87"></script>
+  <script defer src="/static/app.js?v=88"></script>
 </body>
 </html>

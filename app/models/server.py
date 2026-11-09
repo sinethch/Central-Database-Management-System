@@ -8,8 +8,14 @@ class ServerRegisterRequest(BaseModel):
     ssh_port: int = Field(default=22, ge=1, le=65535)
     username: str = Field(..., min_length=1, max_length=128)
     password: str = Field(..., min_length=1, max_length=512)
+    host_key_fingerprint: str = Field(..., min_length=20, max_length=100, pattern=r"^SHA256:[A-Za-z0-9+/]+$")
     database_root: str = Field(default="/srv/dbops/databases", min_length=1, max_length=300)
     backup_root: str = Field(default="/srv/dbops/snapshots", min_length=1, max_length=300)
+
+
+class ServerHostKeyRequest(BaseModel):
+    host: str = Field(..., min_length=1, max_length=253)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
 
 
 class ServerNameUpdateRequest(BaseModel):

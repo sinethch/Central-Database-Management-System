@@ -12,6 +12,8 @@ const AUTH_TOKEN_KEY = "dbops_auth_token";
 let currentRole = "user";
 let currentUsername = "";
 let pendingMfaChallenge = "";
+let pendingServerHostFingerprint = "";
+let pendingServerHostTarget = "";
 let passwordChangeForced = false;
 
 const ENGINES = {
@@ -3190,14 +3192,22 @@ async function editServerPaths(serverId) {
 
 async function registerRemoteServer() {
   const btn = document.querySelector('[data-action="register-server"]');
+  const host = document.getElementById("serverHost").value.trim();
+  const sshPort = Number(document.getElementById("serverSshPort").value);
+  const hostTarget = `${host}:${sshPort}`;
+  if (!pendingServerHostFingerprint || pendingServerHostTarget !== hostTarget || !document.getElementById("serverHostKeyVerified").checked) {
+    showToast("Inspect the host key and confirm that you verified its fingerprint before registering.", "warning");
+    return;
+  }
   setBusy(btn, true, "Checking SSH…");
   try {
     await api("/api/v1/servers", { method: "POST", body: JSON.stringify({
       name: document.getElementById("serverName").value.trim(),
-      host: document.getElementById("serverHost").value.trim(),
-      ssh_port: Number(document.getElementById("serverSshPort").value),
+      host,
+      ssh_port: sshPort,
       username: document.getElementById("serverUsername").value.trim(),
       password: document.getElementById("serverPassword").value,
+      host_key_fingerprint: pendingServerHostFingerprint,
       database_root: document.getElementById("serverDatabaseRoot").value.trim(),
       backup_root: document.getElementById("serverBackupRoot").value.trim(),
     }) });
@@ -3208,6 +3218,38 @@ async function registerRemoteServer() {
     await fetchRemoteServers();
   } catch (err) { showToast(`Server registration failed: ${err.message}`, "error"); }
   finally { setBusy(btn, false); }
+}
+
+function openServerRegistrationDialog() {
+  pendingServerHostFingerprint = "";
+  pendingServerHostTarget = "";
+  document.getElementById("serverHostKeyVerified").checked = false;
+  document.getElementById("serverHostKeyFingerprint").textContent = "Inspect the host key before registering.";
+  openDialog("serverDialog");
+}
+
+async function inspectServerHostKey() {
+  const host = document.getElementById("serverHost").value.trim();
+  const sshPort = Number(document.getElementById("serverSshPort").value);
+  const target = `${host}:${sshPort}`;
+  const button = document.querySelector('[data-action="inspect-server-host-key"]');
+  pendingServerHostFingerprint = "";
+  pendingServerHostTarget = "";
+  document.getElementById("serverHostKeyVerified").checked = false;
+  setBusy(button, true, "Inspecting…");
+  try {
+    const result = await api("/api/v1/servers/host-key", {
+      method: "POST",
+      body: JSON.stringify({ host, ssh_port: sshPort }),
+    });
+    pendingServerHostFingerprint = result.fingerprint;
+    pendingServerHostTarget = target;
+    document.getElementById("serverHostKeyFingerprint").textContent = `${result.host}:${result.ssh_port} · ${result.fingerprint}`;
+    showToast("Fingerprint retrieved. Verify it with a trusted source before confirming.", "info");
+  } catch (err) {
+    document.getElementById("serverHostKeyFingerprint").textContent = err.message;
+    showToast(`Could not inspect SSH host key: ${err.message}`, "error");
+  } finally { setBusy(button, false); }
 }
 
 function openProvisionDbDialog(serverId) {
@@ -3756,7 +3798,8 @@ function handleAction(action, el) {
   switch (action) {
     case "target-carousel-step": stepTargetCarousel(Number(el.dataset.direction)); break;
     case "open-add-db": openAddDbDialog(); break;
-    case "open-server-dialog": openDialog("serverDialog"); break;
+    case "open-server-dialog": openServerRegistrationDialog(); break;
+    case "inspect-server-host-key": inspectServerHostKey(); break;
     case "register-server": registerRemoteServer(); break;
     case "refresh-server-health": refreshServerHealth(el.dataset.id); break;
     case "remove-server-registration": removeServerRegistration(el.dataset.id); break;
@@ -3866,6 +3909,12 @@ function registerEvents() {
   initTargetCarousel();
 
   document.addEventListener("input", (ev) => {
+    if (["serverHost", "serverSshPort"].includes(ev.target.id)) {
+      pendingServerHostFingerprint = "";
+      pendingServerHostTarget = "";
+      document.getElementById("serverHostKeyVerified").checked = false;
+      document.getElementById("serverHostKeyFingerprint").textContent = "Host or port changed. Inspect the host key again.";
+    }
     if (ev.target.matches("[data-autodetect]")) autoDetectEngine(ev.target.value);
     if (ev.target.id === "dbSearchInput") { state.filter = ev.target.value; renderDatabasePills(); }
     if (ev.target.id === "commandInput") buildCommandList(ev.target.value);

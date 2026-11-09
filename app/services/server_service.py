@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 import ipaddress
 import json
 import posixpath
@@ -183,25 +184,64 @@ class ServerService:
 
     def connect(self, row: Dict[str, Any]) -> paramiko.SSHClient:
         client = paramiko.SSHClient()
-        known_hosts = Path(settings.SSH_KNOWN_HOSTS_PATH).expanduser()
-        if not known_hosts.is_file():
-            raise RuntimeError(f"SSH known_hosts file not found: {known_hosts}. Add the host through trusted terminal SSH first, or configure SSH_KNOWN_HOSTS_PATH.")
+        managed_known_hosts = Path(settings.BACKUP_STORAGE_DIR) / "ssh_known_hosts"
+        settings.get_backup_path()
+        managed_known_hosts.touch(exist_ok=True)
         try:
-            client.load_host_keys(str(known_hosts))
+            client.load_host_keys(str(managed_known_hosts))
+            external_known_hosts = Path(settings.SSH_KNOWN_HOSTS_PATH).expanduser()
+            if external_known_hosts.is_file() and external_known_hosts.resolve() != managed_known_hosts.resolve():
+                client.load_host_keys(str(external_known_hosts))
         except (OSError, paramiko.SSHException) as exc:
-            raise RuntimeError(f"Could not read SSH known_hosts file: {known_hosts}") from exc
-        # Reject unknown or changed host keys before authenticating with the password.
-        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+            raise RuntimeError("Could not read the configured SSH known_hosts file.") from exc
+
+        expected_fingerprint = row.get("host_key_fingerprint")
+
+        class VerifyFirstConnection(paramiko.MissingHostKeyPolicy):
+            def missing_host_key(self, ssh_client, hostname, key):
+                fingerprint = ServerService._host_key_fingerprint(key)
+                if not expected_fingerprint or not hmac.compare_digest(fingerprint, expected_fingerprint):
+                    raise paramiko.SSHException("SSH host key fingerprint does not match the fingerprint verified by the administrator.")
+                ssh_client.get_host_keys().add(hostname, key.get_name(), key)
+
+        # Unknown hosts require a fingerprint explicitly verified by the admin;
+        # previously accepted keys remain pinned and changed keys are rejected.
+        client.set_missing_host_key_policy(VerifyFirstConnection())
         password = self._cipher().decrypt(row["password_enc"].encode()).decode()
         try:
             client.connect(
                 hostname=row["host"], port=int(row["ssh_port"]), username=row["username"], password=password,
                 timeout=10, banner_timeout=10, auth_timeout=10, allow_agent=False, look_for_keys=False,
             )
+            client.save_host_keys(str(managed_known_hosts))
             return client
         except Exception:
             client.close()
             raise
+
+    @staticmethod
+    def _host_key_fingerprint(key: paramiko.PKey) -> str:
+        digest = hashlib.sha256(key.asbytes()).digest()
+        return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
+
+    def inspect_host_key(self, host: str, ssh_port: int = 22) -> Dict[str, str]:
+        try:
+            host_ip = ipaddress.ip_address(host)
+        except ValueError as exc:
+            raise ValueError("Use the server IP address to inspect its SSH host key.") from exc
+        if host_ip.is_unspecified or host_ip.is_loopback:
+            raise ValueError("Use a reachable server interface IP, not 0.0.0.0 or loopback.")
+        transport = None
+        try:
+            transport = paramiko.Transport((str(host_ip), int(ssh_port)))
+            transport.start_client(timeout=10)
+            key = transport.get_remote_server_key()
+            return {"host": str(host_ip), "ssh_port": str(ssh_port), "fingerprint": self._host_key_fingerprint(key)}
+        except Exception as exc:
+            raise RuntimeError(f"Could not read the SSH host key: {exc}") from exc
+        finally:
+            if transport:
+                transport.close()
 
     @staticmethod
     def _exec(client: paramiko.SSHClient, args: List[str], timeout: int = 60) -> str:
@@ -261,6 +301,7 @@ class ServerService:
             **{k: data[k] for k in ("name", "host", "ssh_port", "username", "database_root", "backup_root")},
             "id": "srv-" + uuid.uuid4().hex[:8],
             "password_enc": cipher.encrypt(data["password"].encode()).decode(),
+            "host_key_fingerprint": data["host_key_fingerprint"],
             "status": "unknown",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }

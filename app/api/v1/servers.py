@@ -7,11 +7,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import verify_api_key
-from app.models.server import ServerListResponse, ServerRecord, ServerRegisterRequest, ServerNameUpdateRequest, ServerPathsUpdateRequest, ServerHealthResponse, ContainerCreateRequest, ContainerCreateResponse
+from app.models.server import ServerListResponse, ServerRecord, ServerRegisterRequest, ServerHostKeyRequest, ServerNameUpdateRequest, ServerPathsUpdateRequest, ServerHealthResponse, ContainerCreateRequest, ContainerCreateResponse
 from app.services.database_registry import database_registry
 from app.services.server_service import server_service
 
 router = APIRouter(prefix="/servers", tags=["Remote Database Servers"])
+
+
+@router.post("/host-key", dependencies=[Depends(verify_api_key)])
+async def inspect_server_host_key(payload: ServerHostKeyRequest):
+    try:
+        return await asyncio.to_thread(server_service.inspect_host_key, payload.host, payload.ssh_port)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
 @router.get("", response_model=ServerListResponse, dependencies=[Depends(verify_api_key)])
 async def list_servers():
     servers = server_service.list()
