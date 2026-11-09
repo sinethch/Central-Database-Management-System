@@ -11,7 +11,7 @@ services:
       BACKUP_STORAGE_DIR: /var/backups
       SSH_KNOWN_HOSTS_PATH: /run/dbops/known_hosts
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:33001:8080"
     volumes:
       - backups_storage:/var/backups
       - type: bind
