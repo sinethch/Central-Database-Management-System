@@ -91,6 +91,18 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
 
+      - name: Diagnose SSH authentication
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          echo "SSH agent key fingerprints:"
+          ssh-add -l
+          echo "Checking login for ${DEPLOY_USER}@${DEPLOY_HOST}"
+          ssh -vv -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_USER@$DEPLOY_HOST" "true" 2>&1 | tail -n 35
+
       - name: Install production Compose file on server
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
