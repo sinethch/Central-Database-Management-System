@@ -42,6 +42,35 @@ def test_main_admin_can_reset_and_delete_another_admin(tmp_path, monkeypatch):
         auth._mfa_challenges.clear()
 
 
+def test_authenticated_websocket_broadcasts_activity_updates(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BACKUP_STORAGE_DIR", str(tmp_path))
+    auth._sessions.clear()
+    auth._mfa_challenges.clear()
+    try:
+        auth.initialize_users()
+        token = auth.issue_session({"username": "Admin", "role": "admin", "password_change_required": False})
+        with client.websocket_connect("/api/v1/ws") as websocket:
+            websocket.send_json({"token": token})
+            assert websocket.receive_json() == {"type": "ready"}
+
+            response = client.post(
+                "/api/v1/auth/activity",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "client_id": "websocket-test-client-01",
+                    "kind": "user",
+                    "title": "Real-time test event",
+                    "detail": "",
+                    "ts": 1794240000000,
+                },
+            )
+            assert response.status_code == 201
+            assert websocket.receive_json() == {"type": "update", "topic": "activity"}
+    finally:
+        auth._sessions.clear()
+        auth._mfa_challenges.clear()
+
+
 def test_backups_page_includes_snapshot_section():
     """The Backups workspace keeps its table and trend without other workspace content."""
     response = client.get("/backups")

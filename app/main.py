@@ -3,14 +3,16 @@ import re
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.background import BackgroundTask, BackgroundTasks
 
 from app.config import settings
 from app.database import db
-from app.auth import initialize_users
+from app.auth import authenticate_session_token, initialize_users
+from app.realtime import realtime_hub, update_event_for_request
 from app.services.scheduler_service import scheduler_service
 from app.api.v1 import (
     health,
@@ -77,6 +79,52 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+
+@app.middleware("http")
+async def broadcast_successful_changes(request: Request, call_next):
+    response = await call_next(request)
+    event = update_event_for_request(request.method, request.url.path)
+    if event and response.status_code < 400:
+        background = response.background
+        if background is None:
+            background = BackgroundTasks()
+        elif not isinstance(background, BackgroundTasks):
+            background = BackgroundTasks(tasks=[background])
+        background.add_task(realtime_hub.publish, event)
+        response.background = background
+    return response
+
+
+@app.websocket("/api/v1/ws")
+async def websocket_updates(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        auth_message = await asyncio.wait_for(websocket.receive_json(), timeout=5)
+    except (asyncio.TimeoutError, WebSocketDisconnect):
+        await websocket.close(code=4401)
+        return
+    token = auth_message.get("token") if isinstance(auth_message, dict) else None
+    if not isinstance(token, str) or not token or len(token) > 256:
+        await websocket.close(code=4401)
+        return
+    user = authenticate_session_token(token)
+    if not user:
+        await websocket.close(code=4401)
+        return
+
+    await realtime_hub.connect(websocket)
+    try:
+        await websocket.send_json({"type": "ready"})
+        while True:
+            message = await websocket.receive_json()
+            if isinstance(message, dict) and message.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await realtime_hub.disconnect(websocket)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -173,4 +221,3 @@ async def serve_control_plane_ui(request: Request):
     """Serve dedicated full-navigation pages for the DBOps workspace."""
     page = PAGE_PATHS.get(request.url.path, "console")
     return HTMLResponse(render_control_plane_page(page))
-

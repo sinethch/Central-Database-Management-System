@@ -13,6 +13,12 @@ let currentRole = "user";
 let currentUsername = "";
 let passwordResetUsername = "";
 let pendingMfaChallenge = "";
+let realtimeSocket = null;
+let realtimeReconnectTimer = null;
+let realtimePingTimer = null;
+let realtimeRefreshTimer = null;
+let realtimeReconnectDelay = 1000;
+const realtimePendingTopics = new Set();
 let pendingServerHostFingerprint = "";
 let pendingServerHostTarget = "";
 let passwordChangeForced = false;
@@ -335,6 +341,99 @@ async function fetchActivity() {
     saveActivity();
     renderActivity(false);
   } catch { /* Retain the locally saved feed if the shared activity service is offline. */ }
+}
+
+function stopRealtimeUpdates() {
+  clearTimeout(realtimeReconnectTimer);
+  clearInterval(realtimePingTimer);
+  clearTimeout(realtimeRefreshTimer);
+  realtimeReconnectTimer = null;
+  realtimePingTimer = null;
+  realtimeRefreshTimer = null;
+  if (realtimeSocket) {
+    const socket = realtimeSocket;
+    realtimeSocket = null;
+    socket.close();
+  }
+}
+
+function connectRealtimeUpdates() {
+  if (typeof WebSocket === "undefined" || !isAuthed()) return;
+  let token;
+  try { token = localStorage.getItem(AUTH_TOKEN_KEY); }
+  catch (err) { console.warn("[DBOps] Could not read the sign-in token for real-time updates:", err); return; }
+  if (!token) return;
+  if (realtimeSocket && [WebSocket.CONNECTING, WebSocket.OPEN].includes(realtimeSocket.readyState)) return;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  let socket;
+  try { socket = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws`); }
+  catch (err) {
+    console.error("[DBOps] Could not start real-time updates:", err);
+    realtimeReconnectTimer = setTimeout(connectRealtimeUpdates, realtimeReconnectDelay);
+    realtimeReconnectDelay = Math.min(realtimeReconnectDelay * 2, 30000);
+    return;
+  }
+  realtimeSocket = socket;
+  socket.addEventListener("open", () => {
+    if (realtimeSocket === socket) socket.send(JSON.stringify({ token }));
+  });
+  socket.addEventListener("message", (event) => {
+    let message;
+    try { message = JSON.parse(event.data); }
+    catch (err) { console.warn("[DBOps] Ignoring invalid real-time update:", err); return; }
+    if (message.type === "ready") {
+      realtimeReconnectDelay = 1000;
+      clearInterval(realtimePingTimer);
+      realtimePingTimer = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "ping" }));
+      }, 25000);
+      return;
+    }
+    if (message.type === "update") handleRealtimeUpdate(message);
+  });
+  socket.addEventListener("close", (event) => {
+    if (realtimeSocket !== socket) return;
+    realtimeSocket = null;
+    clearInterval(realtimePingTimer);
+    realtimePingTimer = null;
+    if (event.code === 4401) {
+      forgetAuth();
+      window.location.reload();
+      return;
+    }
+    if (isAuthed()) {
+      realtimeReconnectTimer = setTimeout(connectRealtimeUpdates, realtimeReconnectDelay);
+      realtimeReconnectDelay = Math.min(realtimeReconnectDelay * 2, 30000);
+    }
+  });
+  socket.addEventListener("error", () => socket.close());
+}
+
+function handleRealtimeUpdate(event) {
+  if (event.topic === "users" && event.target &&
+      event.target.toLowerCase() === currentUsername.toLowerCase()) {
+    logout(false);
+    return;
+  }
+
+  realtimePendingTopics.add(event.topic);
+  clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(() => {
+    const topics = new Set(realtimePendingTopics);
+    realtimePendingTopics.clear();
+    if (topics.has("activity")) fetchActivity();
+    if (topics.has("users")) {
+      const usersDialog = document.getElementById("usersDialog");
+      if (usersDialog?.open || fallbackModals.usersDialog) refreshUserList();
+    }
+    if (topics.has("servers")) fetchRemoteServers();
+    if (topics.has("storage")) refreshScheduleRepositories();
+    if (topics.has("settings")) refreshHeroNotify();
+    if (topics.has("databases")) fetchRegisteredDatabases().then(() => refreshDashboard());
+    if (["backups", "restores", "storage", "dashboard"].some((topic) => topics.has(topic))) {
+      refreshDashboard();
+    }
+  }, 120);
 }
 
 function relTime(ts) {
@@ -3005,10 +3104,34 @@ async function fetchRemoteServers() {
         <div class="server-health" id="server-health-${escapeHtml(server.id)}"><span class="spinner"></span> Checking server health…</div>
       </article>`).join("") : `<div class="table-empty">No remote servers registered. Add a Linux Docker host to begin.</div>`;
     const backupList = document.getElementById("backupRemoteServers");
-    if (backupList) backupList.innerHTML = state.remoteServers.length ? state.remoteServers.map((server) => `<label class="server-check-row"><input type="checkbox" value="${escapeHtml(server.id)}"> <span>${escapeHtml(server.name)} <small>SSH ${escapeHtml(maskedSshAddress(server))}</small></span></label>`).join("") : "No servers registered.";
+    const selectedBackupServers = new Set([...backupList?.querySelectorAll("input:checked") || []].map((input) => input.value));
+    if (backupList) backupList.innerHTML = state.remoteServers.length ? state.remoteServers.map((server) => `<label class="server-check-row"><input type="checkbox" value="${escapeHtml(server.id)}" ${selectedBackupServers.has(server.id) ? "checked" : ""}> <span>${escapeHtml(server.name)} <small>SSH ${escapeHtml(maskedSshAddress(server))}</small></span></label>`).join("") : "No servers registered.";
+    const scheduleServers = document.getElementById("scheduleServers");
+    const selectedScheduleServers = new Set([...scheduleServers?.querySelectorAll("input:checked") || []].map((input) => input.value));
+    if (scheduleServers && (document.getElementById("scheduleDialog")?.open || fallbackModals.scheduleDialog)) {
+      scheduleServers.innerHTML = state.remoteServers.length
+        ? state.remoteServers.map((server) => `<label class="server-check-row"><input type="checkbox" value="${escapeHtml(server.id)}" ${selectedScheduleServers.has(server.id) ? "checked" : ""}> <span>${escapeHtml(server.name)} <small>SSH ${escapeHtml(maskedSshAddress(server))}</small></span></label>`).join("")
+        : "No servers registered.";
+    }
     await Promise.allSettled(state.remoteServers.flatMap((server) => [refreshServerHealth(server.id), refreshManagedContainers(server.id)]));
   } catch (err) {
     if (cards) cards.innerHTML = `<div class="table-empty">Could not load server list: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function refreshScheduleRepositories() {
+  const dialog = document.getElementById("scheduleDialog");
+  const list = document.getElementById("scheduleRepositories");
+  if (!list || (!dialog?.open && !fallbackModals.scheduleDialog)) return;
+  const selectedRepositories = new Set([...list.querySelectorAll("input:checked")].map((input) => input.value));
+  try {
+    const data = await api("/api/v1/storage/targets");
+    const repositories = data.targets || [];
+    list.innerHTML = repositories.length
+      ? repositories.map((target) => `<label class="server-check-row"><input type="checkbox" value="${escapeHtml(target.id)}" ${selectedRepositories.has(target.id) ? "checked" : ""} ${target.available ? "" : "disabled"}> <span>${escapeHtml(target.name)} <small>${target.available ? "Mounted" : "Unavailable"}</small></span></label>`).join("")
+      : "No mounted repositories registered.";
+  } catch (err) {
+    console.error("[DBOps] Could not refresh mounted repositories:", err);
   }
 }
 
@@ -4015,6 +4138,7 @@ function rememberAuth(user) {
 }
 
 function forgetAuth() {
+  stopRealtimeUpdates();
   try { localStorage.removeItem(AUTH_USER_KEY); localStorage.removeItem(AUTH_TOKEN_KEY); } catch (e) { /* ignore */ }
 }
 
@@ -4544,6 +4668,7 @@ function showWelcomeExperience(username) {
 function startApp() {
   if (appStarted) return;
   appStarted = true;
+  connectRealtimeUpdates();
 
   const autoRefreshButton = document.getElementById("autoRefreshBtn");
   const liveDot = document.getElementById("liveDot");

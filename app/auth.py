@@ -292,6 +292,25 @@ def issue_session(user: dict) -> str:
     return token
 
 
+def authenticate_session_token(token: str) -> Optional[dict]:
+    if not token:
+        return None
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    initialize_users()
+    with sqlite3.connect(_db_path()) as conn:
+        row = conn.execute(
+            "SELECT s.username,s.role,s.expires_at,u.password_change_required "
+            "FROM sessions s JOIN users u ON u.username=s.username WHERE s.token_hash=?",
+            (token_hash,),
+        ).fetchone()
+        if row and row[2] <= time.time():
+            conn.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
+            row = None
+    if not row or row[3]:
+        return None
+    return {"username": row[0], "role": row[1]}
+
+
 def revoke_session(token: str) -> None:
     if not token:
         return

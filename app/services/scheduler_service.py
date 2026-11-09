@@ -9,6 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from app.config import settings
 from app.services.backup_service import backup_service
+from app.realtime import realtime_hub
 from app.services.metrics_service import metrics_service
 from app.services.storage_service import storage_service
 from app.services.server_service import server_service
@@ -188,6 +189,7 @@ class SchedulerService:
                         await asyncio.to_thread(server_service.copy_snapshot, server_id, record.backup_id)
                     except Exception as exc:
                         logger.error("Scheduled snapshot %s remote copy to %s failed: %s", record.backup_id, server_id, exc)
+                await realtime_hub.publish({"type": "update", "topic": "backups"})
         except Exception as e:
             logger.error(f"Scheduled backup failed: {e}")
 
@@ -195,6 +197,7 @@ class SchedulerService:
         logger.info("Running routine backup retention pruning...")
         try:
             backup_service.enforce_retention()
+            await realtime_hub.publish({"type": "update", "topic": "backups"})
         except Exception as e:
             logger.error(f"Routine retention task error: {e}")
 
