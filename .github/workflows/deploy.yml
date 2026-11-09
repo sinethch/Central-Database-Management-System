@@ -147,4 +147,4 @@ jobs:
           IMAGE_TAG: ${{ needs.publish.outputs.tag }}
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml pull dbops-control-plane && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml up -d --no-deps dbops-control-plane"
+            "cd '$DEPLOY_PATH' && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml pull dbops-control-plane dbops-postgres && IMAGE_NAME='$IMAGE_NAME' IMAGE_TAG='$IMAGE_TAG' docker compose -f docker-compose.production.yml up -d dbops-postgres dbops-control-plane"

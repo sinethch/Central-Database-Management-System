@@ -1,4 +1,21 @@
 services:
+  dbops-postgres:
+    image: postgres:16-alpine
+    container_name: dbops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the server .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the server .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the server .env}
+    volumes:
+      - dbops_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   dbops-control-plane:
     image: ${IMAGE_NAME:?Set IMAGE_NAME to the published application image}:${IMAGE_TAG:-latest}
     container_name: dbops-control-plane
@@ -8,6 +25,7 @@ services:
     environment:
       MANAGEMENT_HOST: 0.0.0.0
       MANAGEMENT_PORT: 8080
+      TARGET_DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER in the server .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the server .env}@dbops-postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in the server .env}
       BACKUP_STORAGE_DIR: /var/backups
       SSH_KNOWN_HOSTS_PATH: /run/dbops/known_hosts
     ports:
@@ -24,7 +42,12 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+    depends_on:
+      dbops-postgres:
+        condition: service_healthy
 
 volumes:
   backups_storage:
     name: dbops_backups_storage
+  dbops_postgres_data:
+    name: dbops_postgres_data
