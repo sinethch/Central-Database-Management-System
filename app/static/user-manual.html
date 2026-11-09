@@ -135,7 +135,7 @@
         </section>
 
         <section class="manual-card" id="users"><h2>11. Users and multi-factor authentication</h2>
-          <p>The <strong>Users</strong> control is available to administrators. Use it to create or remove sign-in accounts of either role. You cannot remove your own account or the last remaining administrator. New usernames must be 2–32 characters using letters, numbers, underscores, periods, or hyphens; temporary passwords must be at least 12 characters.</p>
+          <p>The <strong>Users</strong> control is available to administrators. The account named <strong>Admin</strong> can delete other accounts of either role and reset their passwords. Other administrators can manage standard users. The signed-in account cannot delete or reset itself, and the final administrator cannot be removed. A password reset signs the user out, preserves their MFA settings, and requires them to choose a new password at their next sign-in. New usernames must be 2–32 characters using letters, numbers, underscores, periods, or hyphens; passwords must be at least 12 characters.</p>
           <p>MFA is optional per account. When creating a user, select <strong>Enable Microsoft Authenticator (MFA)</strong> only if that account should require MFA. If selected, securely provide the displayed QR code or manual setup key to the user for enrollment. If it is not selected, that user signs in with username and password and is not prompted for an Authenticator code.</p>
           <div class="callout warn">Share MFA setup details and temporary passwords securely. Never include them in screenshots, chat, or support logs.</div>
         </section>

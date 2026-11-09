@@ -3,6 +3,7 @@ from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
 from app.config import settings
+from app import auth
 
 import app.services.database_registry as registry_module
 import app.services.notification_service as notification_module
@@ -12,6 +13,33 @@ from app.services.scheduler_service import scheduler_service
 client = TestClient(app)
 VALID_HEADERS = {"X-API-Key": settings.API_KEY}
 INVALID_HEADERS = {"X-API-Key": "wrong-key"}
+
+def test_main_admin_can_reset_and_delete_another_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BACKUP_STORAGE_DIR", str(tmp_path))
+    auth._sessions.clear()
+    auth._mfa_challenges.clear()
+    try:
+        auth.initialize_users()
+        if not any(user["username"].casefold() == "admin" for user in auth.list_users()):
+            auth.create_user("Admin", "main-admin-test-password", role="admin")
+        auth.create_user("target_admin", "initial-test-password", role="admin")
+        token = auth.issue_session({"username": "Admin", "role": "admin", "password_change_required": False})
+        headers = {"Authorization": f"Bearer {token}"}
+
+        reset = client.post(
+            "/api/v1/auth/users/target_admin/password",
+            headers=headers,
+            json={"new_password": "temporary-test-password"},
+        )
+        assert reset.status_code == 200
+        assert auth.authenticate("target_admin", "temporary-test-password")["password_change_required"] is True
+
+        deleted = client.delete("/api/v1/auth/users/target_admin", headers=headers)
+        assert deleted.status_code == 200
+        assert not any(user["username"] == "target_admin" for user in auth.list_users())
+    finally:
+        auth._sessions.clear()
+        auth._mfa_challenges.clear()
 
 
 def test_backups_page_includes_snapshot_section():

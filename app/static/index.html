@@ -1085,7 +1085,7 @@
 
   <dialog id="usersDialog" class="app-dialog">
     <div class="dialog-content">
-      <div class="dialog-header"><div><h2>Manage users</h2><p>Create accounts or remove other users. Your own account and the last administrator are protected.</p></div><button class="icon-btn" data-action="close-dialog" data-dialog="usersDialog" aria-label="Close">Close</button></div>
+      <div class="dialog-header"><div><h2>Manage users</h2><p>The Admin account can manage any other account, including administrators. Other admins can manage standard users.</p></div><button class="icon-btn" data-action="close-dialog" data-dialog="usersDialog" aria-label="Close">Close</button></div>
       <form id="newUserForm" class="dialog-body">
         <div class="form-group"><label for="newUsername">Username</label><input id="newUsername" class="form-control" minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" required></div>
         <div class="form-group"><label for="newUserPassword">Temporary password (12+ characters)</label><input id="newUserPassword" class="form-control" type="password" minlength="12" required></div>
@@ -1106,6 +1106,18 @@
         <small class="field-hint">Share the QR code or manual key with the new user. They will scan it with Microsoft Authenticator.</small>
       </div>
       <div id="usersList" class="dialog-body"></div>
+    </div>
+  </dialog>
+
+  <dialog id="resetUserPasswordDialog" class="app-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header"><div><h2>Set user password</h2><p>Set a temporary password for <strong id="resetUserPasswordName"></strong>. They must change it at their next sign-in.</p></div><button class="icon-btn" data-action="close-dialog" data-dialog="resetUserPasswordDialog" aria-label="Close">Close</button></div>
+      <form id="resetUserPasswordForm" class="dialog-body">
+        <div class="form-group"><label for="resetUserPassword">New temporary password (12+ characters)</label><input id="resetUserPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
+        <div class="form-group"><label for="confirmResetUserPassword">Confirm temporary password</label><input id="confirmResetUserPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
+        <small class="field-hint">The user's current sessions will be signed out. Their MFA settings will remain unchanged.</small>
+        <button class="btn btn-primary" type="submit">Set password</button>
+      </form>
     </div>
   </dialog>
 
@@ -1132,6 +1144,6 @@
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=88"></script>
+  <script defer src="/static/app.js?v=89"></script>
 </body>
 </html>

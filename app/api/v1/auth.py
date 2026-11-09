@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.auth import authenticate, begin_mfa_challenge, complete_mfa_challenge, current_user, require_admin, create_user, list_users, delete_user, revoke_session, change_password
+from app.auth import authenticate, begin_mfa_challenge, complete_mfa_challenge, current_user, require_admin, create_user, list_users, delete_user, reset_user_password, revoke_session, change_password
 from app.activity_log import record_activity, list_activity, clear_activity as clear_activity_log
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -22,6 +22,9 @@ class MfaVerification(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+class AdminPasswordReset(BaseModel):
     new_password: str = Field(min_length=12, max_length=256)
 
 class ActivityEvent(BaseModel):
@@ -76,6 +79,12 @@ async def remove_user(username: str, user=Depends(current_user)):
     await require_admin(user)
     delete_user(username, user["username"])
     return {"deleted": username}
+
+@router.post("/users/{username}/password")
+async def reset_user_password_route(username: str, payload: AdminPasswordReset, user=Depends(current_user)):
+    await require_admin(user)
+    reset_user_password(username, payload.new_password, user["username"])
+    return {"password_reset": username, "password_change_required": True}
 
 @router.get("/activity")
 async def activity(user=Depends(current_user), db_id: Optional[str] = None):

@@ -2643,6 +2643,7 @@ html[data-theme="light"] .hero::after {
 /* Admin user management */
 .user-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:0.8rem 0; border-top:1px solid var(--border); }
 .user-row span { display:flex; flex-direction:column; gap:0.2rem; }
+.user-row-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:0.5rem; }
 .user-row small { color:var(--text-dim); font-size:0.72rem; }
 
 .admin-only[hidden], [data-action="clear-activity"][hidden] { display:none !important; }

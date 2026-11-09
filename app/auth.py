@@ -225,6 +225,20 @@ def list_users():
         return [{"username": r[0], "role": r[1], "created_at": r[2]} for r in conn.execute("SELECT username,role,created_at FROM users ORDER BY username")]
 
 
+def is_main_admin(username: str) -> bool:
+    return username.casefold() == "admin"
+
+
+def _clear_cached_user_access(username: str) -> None:
+    with _lock:
+        for token, session in list(_sessions.items()):
+            if session["username"].casefold() == username.casefold():
+                _sessions.pop(token, None)
+        for challenge, pending in list(_mfa_challenges.items()):
+            if pending["username"].casefold() == username.casefold():
+                _mfa_challenges.pop(challenge, None)
+
+
 def delete_user(username: str, requester_username: str):
     initialize_users()
     with sqlite3.connect(_db_path()) as conn:
@@ -235,18 +249,34 @@ def delete_user(username: str, requester_username: str):
         if username.casefold() == requester_username.casefold():
             raise HTTPException(400, "You cannot delete your own account.")
         if row[0] == "admin":
+            if not is_main_admin(requester_username):
+                raise HTTPException(403, "Only the Admin account can delete administrator accounts.")
             admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
             if admin_count <= 1:
                 raise HTTPException(400, "The last administrator account cannot be deleted.")
         conn.execute("DELETE FROM users WHERE username=? COLLATE NOCASE", (username,))
         conn.execute("DELETE FROM sessions WHERE username=? COLLATE NOCASE", (username,))
-    with _lock:
-        for token, session in list(_sessions.items()):
-            if session["username"].lower() == username.lower():
-                _sessions.pop(token, None)
-        for challenge, pending in list(_mfa_challenges.items()):
-            if pending["username"].lower() == username.lower():
-                _mfa_challenges.pop(challenge, None)
+    _clear_cached_user_access(username)
+
+
+def reset_user_password(username: str, new_password: str, requester_username: str) -> None:
+    if not is_main_admin(requester_username):
+        raise HTTPException(403, "Only the Admin account can reset other users' passwords.")
+    if username.casefold() == requester_username.casefold():
+        raise HTTPException(400, "Use Change password to update your own password.")
+    initialize_users()
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", new_password.encode(), bytes.fromhex(salt), 310000).hex()
+    with sqlite3.connect(_db_path()) as conn:
+        row = conn.execute("SELECT 1 FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
+        if not row:
+            raise HTTPException(404, "User not found.")
+        conn.execute(
+            "UPDATE users SET password_hash=?,salt=?,password_change_required=1 WHERE username=? COLLATE NOCASE",
+            (digest, salt, username),
+        )
+        conn.execute("DELETE FROM sessions WHERE username=? COLLATE NOCASE", (username,))
+    _clear_cached_user_access(username)
 
 
 def issue_session(user: dict) -> str:

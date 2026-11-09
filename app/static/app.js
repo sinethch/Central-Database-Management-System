@@ -11,6 +11,7 @@ const AUTH_USER_KEY = "dbops_auth_user";
 const AUTH_TOKEN_KEY = "dbops_auth_token";
 let currentRole = "user";
 let currentUsername = "";
+let passwordResetUsername = "";
 let pendingMfaChallenge = "";
 let pendingServerHostFingerprint = "";
 let pendingServerHostTarget = "";
@@ -3813,6 +3814,7 @@ function handleAction(action, el) {
     case "open-users": openUserManagement(); break;
     case "open-change-password": openPasswordChange(false); break;
     case "delete-user": deleteUserAccount(el.dataset.username); break;
+    case "reset-user-password": openUserPasswordReset(el.dataset.username); break;
     case "open-command": openCommandPalette(); break;
     case "command-run": runCommand(Number(el.dataset.index)); break;
     case "clear-activity": clearActivity(); break;
@@ -3906,6 +3908,8 @@ function registerEvents() {
 
   const newUserForm = document.getElementById("newUserForm");
   if (newUserForm) newUserForm.addEventListener("submit", createUserAccount);
+  const resetUserPasswordForm = document.getElementById("resetUserPasswordForm");
+  if (resetUserPasswordForm) resetUserPasswordForm.addEventListener("submit", submitUserPasswordReset);
   initTargetCarousel();
 
   document.addEventListener("input", (ev) => {
@@ -4169,9 +4173,15 @@ function applyRoleUI() {
 async function refreshUserList() {
   const data = await api("/api/v1/auth/users");
   const list = document.getElementById("usersList");
+  const isMainAdmin = currentRole === "admin" && currentUsername.toLowerCase() === "admin";
   list.innerHTML = data.users.map((u) => {
     const isCurrentUser = u.username.toLowerCase() === currentUsername.toLowerCase();
-    return `<div class="user-row"><span><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.role)} · added ${escapeHtml(new Date(u.created_at + "Z").toLocaleDateString())}${isCurrentUser ? " · signed in" : ""}</small></span>${isCurrentUser ? "" : `<button class="btn btn-danger-ghost btn-sm" data-action="delete-user" data-username="${escapeHtml(u.username)}">Delete</button>`}</div>`;
+    const canDelete = !isCurrentUser && (isMainAdmin || u.role === "user");
+    const actions = [
+      canDelete ? `<button class="btn btn-danger-ghost btn-sm" data-action="delete-user" data-username="${escapeHtml(u.username)}">Delete</button>` : "",
+      isMainAdmin && !isCurrentUser ? `<button class="btn btn-secondary btn-sm" data-action="reset-user-password" data-username="${escapeHtml(u.username)}">Set password</button>` : "",
+    ].filter(Boolean).join(" ");
+    return `<div class="user-row"><span><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.role)} · added ${escapeHtml(new Date(u.created_at + "Z").toLocaleDateString())}${isCurrentUser ? " · signed in" : ""}</small></span>${actions ? `<div class="user-row-actions">${actions}</div>` : ""}</div>`;
   }).join("");
 }
 
@@ -4214,6 +4224,34 @@ async function deleteUserAccount(username) {
   if (!await confirmAction({ message: `Delete the account for ${username}?`, title: "Delete user", confirmText: "Delete" })) return;
   try { await api(`/api/v1/auth/users/${encodeURIComponent(username)}`, { method: "DELETE" }); logActivity("user", "Deleted user account", username); showToast(`Account ${username} deleted.`, "success"); await openUserManagement(); }
   catch (err) { showToast(err.message, "error"); }
+}
+
+function openUserPasswordReset(username) {
+  if (currentRole !== "admin" || currentUsername.toLowerCase() !== "admin") return;
+  passwordResetUsername = username;
+  document.getElementById("resetUserPasswordForm").reset();
+  document.getElementById("resetUserPasswordName").textContent = username;
+  openDialog("resetUserPasswordDialog");
+  setTimeout(() => document.getElementById("resetUserPassword").focus(), 0);
+}
+
+async function submitUserPasswordReset(event) {
+  event.preventDefault();
+  if (currentRole !== "admin" || currentUsername.toLowerCase() !== "admin" || !passwordResetUsername) return;
+  const password = document.getElementById("resetUserPassword").value;
+  const confirmation = document.getElementById("confirmResetUserPassword").value;
+  if (password !== confirmation) { showToast("The passwords do not match.", "error"); return; }
+  try {
+    await api(`/api/v1/auth/users/${encodeURIComponent(passwordResetUsername)}/password`, {
+      method: "POST",
+      body: JSON.stringify({ new_password: password }),
+    });
+    logActivity("user", "Reset user password", passwordResetUsername);
+    showToast(`Password reset for ${passwordResetUsername}. They must change it at next sign-in.`, "success");
+    closeDialog("resetUserPasswordDialog");
+    passwordResetUsername = "";
+    await refreshUserList();
+  } catch (err) { showToast(err.message, "error"); }
 }
 
 function openPasswordChange(forced = false) {
@@ -4285,12 +4323,17 @@ function initAuth() {
   const form = document.getElementById("authForm");
   const changePasswordForm = document.getElementById("changePasswordForm");
   const changePasswordDialog = document.getElementById("changePasswordDialog");
+  const resetUserPasswordDialog = document.getElementById("resetUserPasswordDialog");
   const reveal = document.getElementById("authReveal");
   const logoutBtn = document.getElementById("logoutBtn");
   const welcomeContinue = document.getElementById("welcomeContinue");
 
   if (form) form.addEventListener("submit", submitAuth);
   if (changePasswordForm) changePasswordForm.addEventListener("submit", submitPasswordChange);
+  if (resetUserPasswordDialog) resetUserPasswordDialog.addEventListener("close", () => {
+    document.getElementById("resetUserPasswordForm").reset();
+    passwordResetUsername = "";
+  });
   if (changePasswordDialog) changePasswordDialog.addEventListener("cancel", (event) => {
     if (passwordChangeForced) event.preventDefault();
   });

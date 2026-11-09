@@ -62,21 +62,44 @@ def test_each_mfa_user_gets_a_distinct_authenticator_secret(isolated_auth_db):
     assert first["otpauth_uri"] != second["otpauth_uri"]
 
 
-def test_admin_can_delete_another_admin_but_not_their_own_account(isolated_auth_db):
+def test_main_admin_can_delete_another_admin_but_not_their_own_account(isolated_auth_db):
     auth.create_user("admin_one", "a-secure-test-password", role="admin")
-    auth.create_user("admin_two", "another-secure-password", role="admin")
 
-    auth.delete_user("admin_one", "admin_two")
+    auth.delete_user("admin_one", "Admin")
 
-    assert [user["username"] for user in auth.list_users()] == ["Admin", "admin_two"]
+    assert [user["username"] for user in auth.list_users()] == ["Admin"]
     with pytest.raises(HTTPException, match="cannot delete your own account"):
-        auth.delete_user("ADMIN_TWO", "admin_two")
+        auth.delete_user("admin", "ADMIN")
 
 
-def test_delete_user_cannot_remove_the_last_admin(isolated_auth_db):
-    auth.initialize_users()
+def test_other_admin_cannot_delete_an_admin_account(isolated_auth_db):
+    auth.create_user("admin_two", "another-secure-password", role="admin")
+    auth.create_user("admin_three", "third-secure-password", role="admin")
 
-    with pytest.raises(HTTPException, match="last administrator account"):
-        auth.delete_user("Admin", "another-admin")
+    with pytest.raises(HTTPException, match="Only the Admin account"):
+        auth.delete_user("admin_two", "admin_three")
 
-    assert any(user["username"] == "Admin" for user in auth.list_users())
+    assert any(user["username"] == "admin_two" for user in auth.list_users())
+
+
+def test_main_admin_password_reset_forces_change_and_revokes_sessions(isolated_auth_db):
+    auth.create_user("account_user", "initial-secure-password", role="admin")
+    token = auth.issue_session({"username": "account_user", "role": "admin"})
+    auth._mfa_challenges["test-challenge"] = {"username": "account_user"}
+
+    auth.reset_user_password("account_user", "new-temporary-password", "Admin")
+
+    reset_user = auth.authenticate("account_user", "new-temporary-password")
+    assert reset_user["password_change_required"] is True
+    assert auth.authenticate("account_user", "initial-secure-password") is None
+    assert token not in auth._sessions
+    assert "test-challenge" not in auth._mfa_challenges
+
+
+def test_password_reset_is_limited_to_main_admin_and_other_accounts(isolated_auth_db):
+    auth.create_user("account_user", "initial-secure-password")
+
+    with pytest.raises(HTTPException, match="Only the Admin account"):
+        auth.reset_user_password("account_user", "new-temporary-password", "admin_two")
+    with pytest.raises(HTTPException, match="Use Change password"):
+        auth.reset_user_password("Admin", "new-temporary-password", "Admin")
