@@ -1,4 +1,5 @@
 import pytest
+from fastapi import HTTPException
 
 from app import auth
 from app.config import settings
@@ -59,3 +60,23 @@ def test_each_mfa_user_gets_a_distinct_authenticator_secret(isolated_auth_db):
 
     assert first["manual_secret"] != second["manual_secret"]
     assert first["otpauth_uri"] != second["otpauth_uri"]
+
+
+def test_admin_can_delete_another_admin_but_not_their_own_account(isolated_auth_db):
+    auth.create_user("admin_one", "a-secure-test-password", role="admin")
+    auth.create_user("admin_two", "another-secure-password", role="admin")
+
+    auth.delete_user("admin_one", "admin_two")
+
+    assert [user["username"] for user in auth.list_users()] == ["Admin", "admin_two"]
+    with pytest.raises(HTTPException, match="cannot delete your own account"):
+        auth.delete_user("ADMIN_TWO", "admin_two")
+
+
+def test_delete_user_cannot_remove_the_last_admin(isolated_auth_db):
+    auth.initialize_users()
+
+    with pytest.raises(HTTPException, match="last administrator account"):
+        auth.delete_user("Admin", "another-admin")
+
+    assert any(user["username"] == "Admin" for user in auth.list_users())

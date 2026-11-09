@@ -74,7 +74,7 @@ async def add_user(payload: NewUser, user=Depends(current_user)):
 @router.delete("/users/{username}")
 async def remove_user(username: str, user=Depends(current_user)):
     await require_admin(user)
-    delete_user(username)
+    delete_user(username, user["username"])
     return {"deleted": username}
 
 @router.get("/activity")

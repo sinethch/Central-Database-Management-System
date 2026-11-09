@@ -4169,7 +4169,10 @@ function applyRoleUI() {
 async function refreshUserList() {
   const data = await api("/api/v1/auth/users");
   const list = document.getElementById("usersList");
-  list.innerHTML = data.users.map((u) => `<div class="user-row"><span><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.role)} · added ${escapeHtml(new Date(u.created_at + "Z").toLocaleDateString())}</small></span>${u.role === "user" ? `<button class="btn btn-danger-ghost btn-sm" data-action="delete-user" data-username="${escapeHtml(u.username)}">Delete</button>` : ""}</div>`).join("");
+  list.innerHTML = data.users.map((u) => {
+    const isCurrentUser = u.username.toLowerCase() === currentUsername.toLowerCase();
+    return `<div class="user-row"><span><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.role)} · added ${escapeHtml(new Date(u.created_at + "Z").toLocaleDateString())}${isCurrentUser ? " · signed in" : ""}</small></span>${isCurrentUser ? "" : `<button class="btn btn-danger-ghost btn-sm" data-action="delete-user" data-username="${escapeHtml(u.username)}">Delete</button>`}</div>`;
+  }).join("");
 }
 
 async function openUserManagement() {

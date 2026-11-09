@@ -225,14 +225,19 @@ def list_users():
         return [{"username": r[0], "role": r[1], "created_at": r[2]} for r in conn.execute("SELECT username,role,created_at FROM users ORDER BY username")]
 
 
-def delete_user(username: str):
+def delete_user(username: str, requester_username: str):
     initialize_users()
     with sqlite3.connect(_db_path()) as conn:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT role FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
         if not row:
             raise HTTPException(404, "User not found.")
+        if username.casefold() == requester_username.casefold():
+            raise HTTPException(400, "You cannot delete your own account.")
         if row[0] == "admin":
-            raise HTTPException(400, "The admin account cannot be deleted.")
+            admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+            if admin_count <= 1:
+                raise HTTPException(400, "The last administrator account cannot be deleted.")
         conn.execute("DELETE FROM users WHERE username=? COLLATE NOCASE", (username,))
         conn.execute("DELETE FROM sessions WHERE username=? COLLATE NOCASE", (username,))
     with _lock:
