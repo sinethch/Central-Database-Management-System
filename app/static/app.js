@@ -3380,6 +3380,7 @@ function openProvisionDbDialog(serverId) {
   const server = state.remoteServers.find((item) => item.id === serverId);
   if (!server) return;
   state.provisionServerId = serverId;
+  setProvisionNotice("", "info");
   const engineSelect = document.getElementById("provisionEngine");
   const engineDefaults = { postgres: ["postgres:16-alpine", 55432, "dbops-postgres"], mongodb: ["mongo:7", 57017, "dbops-mongodb"], mysql: ["mysql:8", 53306, "dbops-mysql"], redis: ["redis:7-alpine", 56379, "dbops-redis"] };
   const updateEngine = () => {
@@ -3397,7 +3398,7 @@ function openProvisionDbDialog(serverId) {
     updateProvisionUrlFormat();
     checkProvisionPort();
   };
-  engineSelect.addEventListener("change", updateEngine);
+  engineSelect.onchange = updateEngine;
   const portInput = document.getElementById("provisionPort");
   portInput.oninput = () => { updateProvisionUrlFormat(); checkProvisionPort(); };
   ["provisionDbName", "provisionDbUser", "provisionDbPassword"].forEach((id) => {
@@ -3431,6 +3432,16 @@ function updateProvisionUrlFormat() {
 }
 
 let provisionPortCheckTimer;
+function setProvisionNotice(message, type = "info") {
+  const notice = document.getElementById("provisionNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.dataset.state = type;
+  notice.setAttribute("role", type === "error" ? "alert" : "status");
+  notice.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
+  notice.hidden = !message;
+}
+
 async function checkProvisionPort() {
   updateProvisionUrlFormat();
   const status = document.getElementById("provisionPortStatus");
@@ -3469,18 +3480,19 @@ async function provisionPostgresContainer() {
   const portStatus = document.getElementById("provisionPortStatus");
   const hostPort = Number(document.getElementById("provisionPort").value);
   if (!Number.isInteger(hostPort) || hostPort < 1024 || hostPort > 65535 || portStatus.dataset.state === "used" || portStatus.dataset.state !== "free") {
-    showToast("Choose a valid server port and wait for its availability check to confirm it is free.", "warning");
+    setProvisionNotice("Choose a valid server port and wait for its availability check to confirm it is free.", "error");
     checkProvisionPort();
     return;
   }
   const imagePatterns = { postgres: /^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/, mongodb: /^mongo:(6|7|8)(\.\d+)?(-[a-z0-9.-]+)?$/, mysql: /^(mysql:8(\.\d+)?|mariadb:10\.\d+|mariadb:11\.\d+)(-[a-z0-9.-]+)?$/, redis: /^redis:([7-9]|[1-9][0-9])(\.\d+)?(-[a-z0-9.-]+)?$/ };
   const hasDatabaseFields = engine !== "redis";
   if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || (hasDatabaseFields && (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser))) || databasePassword.length < 16 || !imagePatterns[engine]?.test(image)) {
-    showToast(`Provide a valid label and container name, ${hasDatabaseFields ? "database name and user, " : ""}a supported image, and a password of at least 16 characters.`, "warning"); return;
+    setProvisionNotice(`Provide a valid label and container name, ${hasDatabaseFields ? "database name and user, " : ""}a supported image, and a password of at least 16 characters.`, "error"); return;
   }
   const btn = document.querySelector('[data-action="provision-database"]');
   setBusy(btn, true, "Creating container…");
   try {
+    setProvisionNotice(`Connecting to the server and creating ${name}…`, "info");
     clearServerOperationOutput();
     setServerOperationStatus("Connecting", "badge-info");
     appendServerOperationLine(`Starting provision for ${name} using ${image}`, "info");
@@ -3491,11 +3503,14 @@ async function provisionPostgresContainer() {
       }),
     });
     if (!response.ok) {
-      const problem = await response.json().catch(() => ({}));
-      throw new Error(problem.detail || `Request failed (${response.status})`);
+      const body = await response.text();
+      let detail = body;
+      try {
+        const problem = body ? JSON.parse(body) : {};
+        detail = problem.detail || problem.message || body;
+      } catch (_) { /* Use the raw response when the server does not return JSON. */ }
+      throw new Error(detail || `Request failed (${response.status})`);
     }
-    document.getElementById("provisionDbPassword").value = "";
-    closeDialog("provisionDbDialog");
     if (!response.body) throw new Error("This browser does not support live server output.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -3510,18 +3525,26 @@ async function provisionPostgresContainer() {
         const line = frame.split("\n").find((part) => part.startsWith("data: "));
         if (!line) continue;
         const event = JSON.parse(line.slice(6));
-        if (event.type === "progress") appendServerOperationLine(event.message, "info");
+        if (event.type === "progress") {
+          setProvisionNotice(event.message || "Provisioning…", "info");
+          appendServerOperationLine(event.message, "info");
+        }
         if (event.type === "error") throw new Error(event.message);
         if (event.type === "complete") {
           completed = true;
           const data = event.result;
+          document.getElementById("provisionDbPassword").value = "";
           setServerOperationStatus("Complete", "badge-success");
           appendServerOperationLine(`Database registered: ${data.database_name}`, "success");
           state.activeDatabaseId = data.database_id;
-          showToast(`New database container registered (${data.status}) and selected.`, data.status === "online" ? "success" : "warning", { timeout: 9000 });
-          logActivity("server", "Created isolated PostgreSQL container", `${data.container_name} · ${data.data_directory}`);
+          setProvisionNotice(
+            `Container created and database registered${data.status === "online" ? " successfully" : ` with status "${data.status}"`}. It is now selected under Targets.`,
+            data.status === "online" ? "success" : "info",
+          );
+          logActivity("server", `Created isolated ${engine} container`, `${data.container_name} · ${data.data_directory}`);
           await fetchRegisteredDatabases();
           signalDatabaseRegistryChange();
+          await refreshManagedContainers(state.provisionServerId);
           await refreshDashboard();
         }
       }
@@ -3531,7 +3554,7 @@ async function provisionPostgresContainer() {
   } catch (err) {
     setServerOperationStatus("Failed", "badge-danger");
     appendServerOperationLine(err.message, "error");
-    showToast(`Container creation failed: ${err.message}`, "error", { timeout: 10000 });
+    setProvisionNotice(`Container creation failed: ${err.message}`, "error");
   }
   finally { setBusy(btn, false); }
 }

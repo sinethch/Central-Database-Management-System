@@ -989,6 +989,10 @@ main {
 .server-log-line.success { color:var(--ok); border-color:var(--ok); }
 .server-log-line.error { color:var(--bad); border-color:var(--bad); }
 .server-log-line.muted { color:var(--text-faint); font-family:var(--font); }
+.provision-notice { margin:0 0 1rem; padding:.75rem .9rem; border:1px solid var(--border); border-radius:10px; color:var(--text-dim); background:var(--inset); font-size:.82rem; line-height:1.5; overflow-wrap:anywhere; }
+.provision-notice[data-state="error"] { border-color:rgba(240,87,77,.5); color:var(--bad); background:rgba(240,87,77,.09); }
+.provision-notice[data-state="success"] { border-color:rgba(63,185,80,.5); color:var(--ok); background:rgba(63,185,80,.09); }
+.provision-notice[hidden] { display:none; }
 @media (max-width: 1000px) { .server-operations-layout.has-live-output { grid-template-columns:1fr; } .server-operation-log { max-height:280px; } }
 .server-card { display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow-sm); position: relative; overflow: hidden; color: var(--text); }
 .server-card::before { display: none; }

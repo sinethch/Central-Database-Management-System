@@ -792,6 +792,7 @@
 
   <dialog id="provisionDbDialog" closedby="any" aria-labelledby="provisionDbTitle"><div class="dialog-content">
     <div class="dialog-head"><div><h3 id="provisionDbTitle" class="dialog-title">Create Isolated Database Container</h3><p id="provisionServerLabel" class="dialog-subtitle">New container and new data directory only. Existing containers are not changed.</p></div></div>
+    <div id="provisionNotice" class="provision-notice" data-state="info" role="status" aria-live="polite" hidden></div>
     <div class="form-grid">
       <div class="form-group"><label for="provisionEngine">Database engine</label><select id="provisionEngine" class="form-control"><option value="postgres">PostgreSQL</option><option value="mongodb">MongoDB</option><option value="mysql">MySQL / MariaDB</option><option value="redis">Redis</option></select></div>
       <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>

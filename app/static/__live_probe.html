@@ -731,6 +731,7 @@ document.documentElement.dataset.auth = "in";
 
   <dialog id="provisionDbDialog" closedby="any" aria-labelledby="provisionDbTitle"><div class="dialog-content">
     <div class="dialog-head"><div><h3 id="provisionDbTitle" class="dialog-title">Create Isolated PostgreSQL Container</h3><p id="provisionServerLabel" class="dialog-subtitle">New container and new data directory only. Existing containers are not changed.</p></div></div>
+    <div id="provisionNotice" class="provision-notice" data-state="info" role="status" aria-live="polite" hidden></div>
     <div class="form-grid">
       <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>
       <div class="form-group"><label for="provisionContainerName">Docker container name</label><input id="provisionContainerName" class="form-control mono" value="dbops-postgres" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" required><small class="field-hint">Letters, numbers, dots, underscores, and hyphens; must be unique on this server.</small></div>

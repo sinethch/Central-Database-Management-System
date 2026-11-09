@@ -104,6 +104,9 @@ def test_console_uses_original_hero_and_has_separate_post_login_welcome():
     assert 'href="#target-selector"' not in welcome
     assert "images.unsplash.com" not in response.text
     assert "cdn.21st.dev" not in response.text
+    provision_dialog = response.text.split('<dialog id="provisionDbDialog"', 1)[1].split("</dialog>", 1)[0]
+    assert 'id="provisionNotice"' in provision_dialog
+    assert 'aria-live="polite"' in provision_dialog
 
 
 @pytest.mark.parametrize(
