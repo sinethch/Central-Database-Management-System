@@ -720,6 +720,21 @@ main {
 }
 .target-polaroid-remove:hover { background: var(--bad); }
 .target-polaroid-remove:focus-visible { outline: 2px solid var(--bad); outline-offset: 2px; }
+.target-polaroid-rename {
+  position:absolute;
+  z-index:3;
+  top:30px;
+  right:26px;
+  padding:.28rem .48rem;
+  border:1px solid rgba(255,255,255,.35);
+  border-radius:999px;
+  background:rgba(17,22,33,.88);
+  color:#fff;
+  font:600 .62rem/1 var(--font);
+  cursor:pointer;
+}
+.target-polaroid-rename:hover { background:var(--accent); }
+.target-polaroid-rename:focus-visible { outline:2px solid var(--accent-hover); outline-offset:2px; }
 .target-carousel-controls { display: flex; align-items: center; justify-content: center; gap: .7rem; margin-top: .15rem; }
 .target-carousel-arrow {
   display: grid;

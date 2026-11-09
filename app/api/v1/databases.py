@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from app.api.deps import verify_api_key
 from app.auth import current_user, require_admin
 from app.models.database_registry import (
@@ -12,6 +13,10 @@ from app.services.database_registry import database_registry
 from app.services.database_browser import database_browser
 
 router = APIRouter(prefix="/databases", tags=["Centralized Database Registry"])
+
+
+class DatabaseNameUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
 
 
 @router.get("/{db_id}/browse/tables")
@@ -92,6 +97,18 @@ async def test_database_connection(payload: DatabaseTestRequest):
     return await database_registry.verify_connection(payload.engine, payload.connection_url)
 
 
+@router.patch("/{db_id}/name", response_model=DatabaseInstance)
+async def rename_database(db_id: str, payload: DatabaseNameUpdate, user=Depends(current_user)):
+    """Update only a registered target's display name."""
+    await require_admin(user)
+    try:
+        return database_registry.rename_database(db_id, payload.name)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
 @router.get("/{db_id}/connection-url")
 async def get_database_connection_url(db_id: str, user=Depends(current_user)):
     """Return a registered database URL only to administrators, for explicit copying."""
@@ -113,4 +130,3 @@ async def unregister_database(db_id: str):
     from app.services.restore_service import restore_service
     restore_service.clear_registered_database_reference(db_id)
     return {"message": f"Database '{db_id}' unregistered successfully."}
-

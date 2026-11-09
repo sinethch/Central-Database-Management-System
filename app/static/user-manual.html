@@ -89,6 +89,7 @@
 
         <section class="manual-card" id="targets"><h2>3. Registering and removing database targets</h2>
           <h3>Add a database</h3><ol><li>Click <strong>Add database instance</strong>.</li><li>Enter a display label and connection URL. Supported schemes include <code>postgresql://</code>, <code>mongodb://</code>, <code>mongodb+srv://</code>, <code>mysql://</code>, and <code>redis://</code>; the engine is detected from the URL and can be reviewed in the form.</li><li>Click <strong>Test Connection</strong> to check connectivity, then <strong>Add Database</strong>.</li><li>Select its target pill to view its dashboard.</li></ol>
+          <p>Administrators can use <strong>Edit</strong> on a target card to change its display name in DBOps. This does not rename the actual database, container, or server.</p>
           <p>The connection test and monitoring queries are intended to read telemetry. The account still needs enough permissions to read the metrics being displayed. Store connection credentials securely and use a monitoring account with limited privileges.</p>
           <h3>Remove a target from monitoring</h3><p>Select the target and click <strong>Unregister</strong>. This removes its entry from the app registry. It does not issue a database drop, modify records, or delete the database.</p>
         </section>

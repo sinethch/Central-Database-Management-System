@@ -1521,6 +1521,7 @@ function renderDatabasePills() {
           <span class="target-polaroid-status ${escapeHtml(reachability.status)}" title="${escapeHtml(statusTitle)}">${escapeHtml(label)}</span>
         </span>
       </button>
+      ${currentRole === "admin" ? `<button class="target-polaroid-rename" data-action="rename-target" data-id="${escapeHtml(db.id)}" title="Edit target display name" aria-label="Edit display name for ${escapeHtml(db.name)}" type="button">Edit</button>` : ""}
       ${db.id !== "db-primary" ? `<button class="target-polaroid-remove" data-action="unregister-target" data-id="${escapeHtml(db.id)}" title="Remove ${escapeHtml(db.name)} from this application" aria-label="Remove ${escapeHtml(db.name)} from this application" type="button"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-trash"/></svg></button>` : ""}
     </div>`;
   }).join("");
@@ -1575,7 +1576,7 @@ function initTargetCarousel() {
 
   container.addEventListener("pointerdown", (event) => {
     const stage = event.target.closest(".target-carousel-stage");
-    if (!stage || event.button !== 0 || event.target.closest(".target-carousel-controls, .target-polaroid-remove")) return;
+    if (!stage || event.button !== 0 || event.target.closest(".target-carousel-controls, .target-polaroid-remove, .target-polaroid-rename")) return;
     targetCarouselDrag = { stage, startX: event.clientX, startOffset: targetCarouselOffset, moved: false };
   });
   container.addEventListener("pointermove", (event) => {
@@ -1774,6 +1775,64 @@ async function selectDatabase(dbId) {
   if (target) { showToast(`Monitoring target: ${target.name}`, "info"); logActivity("switch", "Switched active target", target.name, target.id); }
   await refreshDashboard();
   await fetchMigrationHistory();
+}
+
+function openTargetRename(dbId) {
+  if (currentRole !== "admin") {
+    showToast("Administrator access is required to rename targets.", "error");
+    return;
+  }
+  const target = state.databases.find((database) => database.id === dbId);
+  if (!target) {
+    showToast("That target is no longer available. Refresh the target list and try again.", "error");
+    return;
+  }
+  document.getElementById("renameTargetId").value = target.id;
+  document.getElementById("renameTargetName").value = target.name;
+  document.getElementById("renameTargetMessage").textContent =
+    "This changes only the target's display name in DBOps. It does not rename the database, container, or server.";
+  openDialog("renameTargetDialog");
+  setTimeout(() => {
+    const input = document.getElementById("renameTargetName");
+    input.focus();
+    input.select();
+  }, 0);
+}
+
+async function submitTargetRename(event) {
+  event.preventDefault();
+  if (currentRole !== "admin") {
+    showToast("Administrator access is required to rename targets.", "error");
+    return;
+  }
+  const dbId = document.getElementById("renameTargetId").value;
+  const name = document.getElementById("renameTargetName").value.trim();
+  if (!name) {
+    document.getElementById("renameTargetName").focus();
+    showToast("Enter a display name for this target.", "error");
+    return;
+  }
+  const button = document.querySelector("#renameTargetForm button[type='submit']");
+  setBusy(button, true, "Saving…");
+  try {
+    const updated = await api(`/api/v1/databases/${encodeURIComponent(dbId)}/name`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    });
+    const target = state.databases.find((database) => database.id === dbId);
+    if (target) target.name = updated.name;
+    renderDatabasePills();
+    updateActiveToolbar();
+    renderBrowseDatabaseOptions();
+    closeDialog("renameTargetDialog");
+    showToast("Target display name updated.", "success");
+    logActivity("database", "Renamed target display name", updated.name, dbId);
+  } catch (err) {
+    document.getElementById("renameTargetMessage").textContent = err.message;
+    showToast(`Could not rename target: ${err.message}`, "error");
+  } finally {
+    setBusy(button, false);
+  }
 }
 
 function renderBrowseMessage(message) {
@@ -3974,6 +4033,7 @@ function handleAction(action, el) {
     case "unregister": confirmUnregisterActiveDb(); break;
     case "unregister-target": confirmUnregisterActiveDb(el.dataset.id); break;
     case "select-db": selectDatabase(el.dataset.id); break;
+    case "rename-target": openTargetRename(el.dataset.id); break;
     case "browse-refresh-tables": if (isAuthed()) refreshBrowserTables(); break;
     case "browse-fullscreen": toggleBrowseFullscreen(); break;
     case "browse-load": browseState.offset = 0; loadBrowserRows(); break;
@@ -4056,6 +4116,8 @@ function registerEvents() {
   if (newUserForm) newUserForm.addEventListener("submit", createUserAccount);
   const resetUserPasswordForm = document.getElementById("resetUserPasswordForm");
   if (resetUserPasswordForm) resetUserPasswordForm.addEventListener("submit", submitUserPasswordReset);
+  const renameTargetForm = document.getElementById("renameTargetForm");
+  if (renameTargetForm) renameTargetForm.addEventListener("submit", submitTargetRename);
   initTargetCarousel();
 
   document.addEventListener("input", (ev) => {

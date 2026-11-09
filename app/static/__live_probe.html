@@ -1015,6 +1015,17 @@ document.documentElement.dataset.auth = "in";
     </div>
   </footer>
 
+  <dialog id="renameTargetDialog" class="app-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header"><div><h2>Edit target display name</h2><p id="renameTargetMessage">This changes only the target's display name in DBOps. It does not rename the database, container, or server.</p></div><button class="icon-btn" data-action="close-dialog" data-dialog="renameTargetDialog" aria-label="Close">Close</button></div>
+      <form id="renameTargetForm" class="dialog-body">
+        <input id="renameTargetId" type="hidden">
+        <div class="form-group"><label for="renameTargetName">Display name</label><input id="renameTargetName" class="form-control" minlength="1" maxlength="120" required></div>
+        <button class="btn btn-primary" type="submit">Save display name</button>
+      </form>
+    </div>
+  </dialog>
+
   <dialog id="usersDialog" class="app-dialog">
     <div class="dialog-content">
       <div class="dialog-header"><div><h2>Manage users</h2><p>The Admin account can manage any other account, including administrators. Other admins can manage standard users.</p></div><button class="icon-btn" data-action="close-dialog" data-dialog="usersDialog" aria-label="Close">Close</button></div>
@@ -1060,7 +1071,7 @@ document.documentElement.dataset.auth = "in";
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=90"></script>
+  <script defer src="/static/app.js?v=91"></script>
 
 <script>
 window.addEventListener("load", function () {

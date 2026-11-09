@@ -145,6 +145,24 @@ class DatabaseRegistryService:
         res_entry["connection_url"] = mask_url(connection_url)
         return DatabaseInstance(**res_entry)
 
+    def rename_database(self, db_id: str, name: str) -> DatabaseInstance:
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("A target display name is required.")
+        if len(name) > 120:
+            raise ValueError("Target display names must be 120 characters or fewer.")
+
+        records = self._load()
+        target = next((record for record in records if record.get("id") == db_id), None)
+        if target is None:
+            raise LookupError(f"Database '{db_id}' not found.")
+        target["name"] = name
+        self._save(records)
+
+        result = dict(target)
+        result["connection_url"] = mask_url(result.get("connection_url", ""))
+        return DatabaseInstance(**result)
+
     async def verify_connection(self, engine: str, connection_url: str) -> Dict[str, Any]:
         """Attempts a short, read-only connection to the target and reports the result."""
         engine = (engine or "").lower()
@@ -230,4 +248,3 @@ class DatabaseRegistryService:
 
 
 database_registry = DatabaseRegistryService()
-

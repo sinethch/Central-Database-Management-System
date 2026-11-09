@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
@@ -262,6 +263,44 @@ def test_database_registry_endpoints():
     assert db_data["name"] == "DevOps Mongo Analytics"
     assert db_data["engine"] == "mongodb"
     assert "secret123" not in db_data["connection_url"], "Password must be masked in API output"
+
+
+def test_admin_can_rename_target_display_name_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BACKUP_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setattr(registry_module, "DATABASES_FILE", tmp_path / "registered_databases.json")
+    auth._sessions.clear()
+    auth._mfa_challenges.clear()
+    try:
+        auth.initialize_users()
+        target = asyncio.run(registry_module.database_registry.add_database(
+            name="Original target name",
+            engine="postgres",
+            connection_url="postgresql://dbuser:dbpassword@localhost:5432/appdb",
+            verify=False,
+        ))
+        admin_token = auth.issue_session({"username": "Admin", "role": "admin", "password_change_required": False})
+        response = client.patch(
+            f"/api/v1/databases/{target.id}/name",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"name": "QA target"},
+        )
+        assert response.status_code == 200
+        assert response.json()["name"] == "QA target"
+        saved = next(item for item in registry_module.database_registry._load() if item["id"] == target.id)
+        assert saved["name"] == "QA target"
+        assert saved["connection_url"] == "postgresql://dbuser:dbpassword@localhost:5432/appdb"
+
+        auth.create_user("regular_user", "a-secure-test-password")
+        user_token = auth.issue_session({"username": "regular_user", "role": "user", "password_change_required": False})
+        denied = client.patch(
+            f"/api/v1/databases/{target.id}/name",
+            headers={"Authorization": f"Bearer {user_token}"},
+            json={"name": "Unauthorized rename"},
+        )
+        assert denied.status_code == 403
+    finally:
+        auth._sessions.clear()
+        auth._mfa_challenges.clear()
 
 
 def test_actions_endpoints():
