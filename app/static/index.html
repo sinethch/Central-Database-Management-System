@@ -582,6 +582,34 @@
     </section>
     <!-- workspace:restored-databases:end -->
 
+    <!-- workspace:storage:start -->
+    <!-- Storage + locks -->
+    <section class="flex-row split-row" id="storage">
+      <div class="section reveal">
+        <div class="section-header">
+          <h2 id="relationsHeaderTitle" class="section-title">Top Tables by Size</h2>
+        </div>
+        <div class="table-responsive scroll-area">
+          <table>
+            <thead><tr><th>Name</th><th>Total</th><th>Data</th><th>Index</th></tr></thead>
+            <tbody id="tablesTableBody">
+              <tr><td colspan="4" class="table-loading"><span class="spinner"></span> Querying telemetry…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section reveal">
+        <div class="section-header">
+          <h2 class="section-title">Lock Contention Diagnostics</h2>
+          <span id="locksCountBadge" class="badge badge-success">0 Waiting Locks</span>
+        </div>
+        <div id="locksContent" class="locks-content">
+          <div class="empty-ok">All lock queues clear. No transactions are waiting on locks.</div>
+        </div>
+      </div>
+    </section>
+    <!-- workspace:storage:end -->
 
 
     <!-- workspace:data-browser:start -->

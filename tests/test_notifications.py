@@ -4,6 +4,7 @@ import json
 import pytest
 
 import app.services.notification_service as ns_mod
+from app.config import settings
 from app.services.notification_service import notification_service
 
 
@@ -11,6 +12,7 @@ from app.services.notification_service import notification_service
 def isolated(tmp_path, monkeypatch):
     """Point the notification settings file at a throwaway path for every test."""
     monkeypatch.setattr(ns_mod, "SETTINGS_FILE", tmp_path / "notification_settings.json")
+    monkeypatch.setattr(settings, "DATABASE_CREDENTIAL_ENCRYPTION_KEY", "unit-test-credential-encryption-key")
     return tmp_path
 
 

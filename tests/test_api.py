@@ -73,6 +73,7 @@ def test_workspace_pages_only_include_relevant_sections(path, page, included, ex
 @pytest.fixture(autouse=True)
 def isolate_persistent_services(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "BACKUP_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setattr(settings, "DATABASE_CREDENTIAL_ENCRYPTION_KEY", "unit-test-credential-encryption-key")
     monkeypatch.setattr(backup_service, "metadata_file", tmp_path / "backup_metadata.json")
     monkeypatch.setattr(registry_module, "DATABASES_FILE", tmp_path / "registered_databases.json")
     monkeypatch.setattr(notification_module, "SETTINGS_FILE", tmp_path / "notification_settings.json")
@@ -193,7 +194,9 @@ def test_database_registry_endpoints():
         "connection_url": "mongodb://telemetry_user:secret123@mongo-host:27017/analytics",
         "verify_connectivity": False
     }
-    create_res = client.post("/api/v1/databases", json=payload, headers=VALID_HEADERS)
+    with patch.object(registry_module.database_registry, "verify_connection", new_callable=AsyncMock) as verify:
+        verify.return_value = {"connected": True, "latency_ms": 1.0, "version": "MongoDB test", "error": None}
+        create_res = client.post("/api/v1/databases", json=payload, headers=VALID_HEADERS)
     assert create_res.status_code == 200
     db_data = create_res.json()
     assert db_data["name"] == "DevOps Mongo Analytics"
