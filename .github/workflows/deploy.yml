@@ -105,10 +105,15 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" "true" 2>&1 | tail -n 35
 
       - name: Install production Compose file on server
+        shell: bash
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-        run: scp -o BatchMode=yes -o StrictHostKeyChecking=accept-new docker-compose.production.yml "$DEPLOY_USER@$DEPLOY_HOST:/opt/dbops/docker-compose.production.yml"
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p /opt/dbops"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=accept-new docker-compose.production.yml \
+            "$DEPLOY_USER@$DEPLOY_HOST:/opt/dbops/docker-compose.production.yml"
 
       - name: Sign in server to GHCR
         shell: bash
