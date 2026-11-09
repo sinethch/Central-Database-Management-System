@@ -33,6 +33,25 @@ def test_login_with_enrolled_mfa_requires_verification(isolated_auth_db):
     result = auth.begin_mfa_challenge(user)
 
     assert result["mfa_required"] is True
-    assert result["setup_required"] is False
+    assert result["setup_required"] is True
+    assert result["username"] == "mfa_user"
+    assert result["qr_data_url"].startswith("data:image/svg+xml;base64,")
+    assert result["manual_secret"]
     assert result["challenge"]
     assert "token" not in result
+
+    code = auth._totp_code(result["manual_secret"])
+    token, session_user = auth.complete_mfa_challenge(result["challenge"], code)
+    assert token
+    assert session_user == {"username": "mfa_user", "role": "user"}
+
+    verified = auth.begin_mfa_challenge(auth.authenticate("mfa_user", "a-secure-test-password"))
+    assert verified["setup_required"] is False
+
+
+def test_each_mfa_user_gets_a_distinct_authenticator_secret(isolated_auth_db):
+    first = auth.create_user("admin_one", "a-secure-test-password", enable_mfa=True, role="admin")
+    second = auth.create_user("admin_two", "another-secure-password", enable_mfa=True, role="admin")
+
+    assert first["manual_secret"] != second["manual_secret"]
+    assert first["otpauth_uri"] != second["otpauth_uri"]

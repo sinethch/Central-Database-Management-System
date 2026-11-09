@@ -248,6 +248,7 @@
       </div>
       <button class="btn btn-secondary btn-sm" data-action="open-notifications" type="button" title="Telegram notifications"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-bell"/></svg> Alerts</button>
       <a href="/static/user-manual.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="Open the DBOps user manual">User Manual</a>
+      <button class="btn btn-secondary btn-sm" data-action="open-change-password" type="button">Change password</button>
       <button class="btn btn-secondary btn-sm admin-only" data-action="open-users" type="button">Users</button>
       <div class="user-chip" id="userChip" title="Signed in">
         <span class="user-chip-avatar" id="userChipAvatar">A</span>
@@ -1092,17 +1093,32 @@
             <input type="checkbox" id="newUserMfa" value="1">
             <span>Enable Microsoft Authenticator (MFA)</span>
           </label>
-          <small class="field-hint">When enabled, the new user must scan the QR code below during first sign-in.</small>
+          <small class="field-hint">New accounts must change this temporary password at first sign-in. If MFA is enabled, the user will scan their personal QR code during setup.</small>
         </div>
         <button class="btn btn-primary" type="submit">Create user</button>
       </form>
       <div id="userMfaResult" class="dialog-body" hidden>
-        <div class="form-group"><label>Microsoft Authenticator Setup</label></div>
+        <div class="form-group"><label id="userMfaSetupTitle">Microsoft Authenticator Setup</label></div>
         <div class="auth-qr-card auth-qr-card-3d"><img id="userMfaQr" class="auth-mfa-qr" alt="Authenticator setup QR code"></div>
         <div class="form-group"><label for="userMfaSecret">Manual Entry Key</label><input type="text" id="userMfaSecret" class="form-control mono auth-mfa-secret" readonly autocomplete="off"></div>
         <small class="field-hint">Share the QR code or manual key with the new user. They will scan it with Microsoft Authenticator.</small>
       </div>
       <div id="usersList" class="dialog-body"></div>
+    </div>
+  </dialog>
+
+  <dialog id="changePasswordDialog" class="app-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <div><h2>Change password</h2><p id="changePasswordMessage">Enter your current password and choose a new one.</p></div>
+        <button class="icon-btn" id="closePasswordDialog" data-action="close-dialog" data-dialog="changePasswordDialog" aria-label="Close">Close</button>
+      </div>
+      <form id="changePasswordForm" class="dialog-body">
+        <div class="form-group"><label for="currentPassword">Current password</label><input id="currentPassword" class="form-control" type="password" autocomplete="current-password" required></div>
+        <div class="form-group"><label for="newPassword">New password (12+ characters)</label><input id="newPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
+        <div class="form-group"><label for="confirmNewPassword">Confirm new password</label><input id="confirmNewPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
+        <button class="btn btn-primary" type="submit">Update password</button>
+      </form>
     </div>
   </dialog>
 
@@ -1114,6 +1130,6 @@
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=86"></script>
+  <script defer src="/static/app.js?v=87"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ const AUTH_TOKEN_KEY = "dbops_auth_token";
 let currentRole = "user";
 let currentUsername = "";
 let pendingMfaChallenge = "";
+let passwordChangeForced = false;
 
 const ENGINES = {
   postgres: { abbr: "PG", label: "PostgreSQL", color: "#5b8cff" },
@@ -3767,6 +3768,7 @@ function handleAction(action, el) {
     case "clear-server-output": clearServerOperationOutput(); break;
     case "close-server-output": closeServerOperationOutput(); break;
     case "open-users": openUserManagement(); break;
+    case "open-change-password": openPasswordChange(false); break;
     case "delete-user": deleteUserAccount(el.dataset.username); break;
     case "open-command": openCommandPalette(); break;
     case "command-run": runCommand(Number(el.dataset.index)); break;
@@ -4085,7 +4087,7 @@ async function submitAuth(event) {
       return;
     }
     localStorage.setItem(AUTH_TOKEN_KEY, data.token); rememberAuth(data.user.username); currentRole = data.user.role;
-    if (btn) btn.classList.remove("is-busy"); passEl.value = ""; onAuthSuccess();
+    if (btn) btn.classList.remove("is-busy"); passEl.value = ""; onAuthSuccess(data.user);
   } catch (err) {
     if (btn) btn.classList.remove("is-busy");
     showAuthError(err.message);
@@ -4115,14 +4117,20 @@ function applyRoleUI() {
   if (clearButton) clearButton.hidden = currentRole !== "admin";
 }
 
+async function refreshUserList() {
+  const data = await api("/api/v1/auth/users");
+  const list = document.getElementById("usersList");
+  list.innerHTML = data.users.map((u) => `<div class="user-row"><span><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.role)} · added ${escapeHtml(new Date(u.created_at + "Z").toLocaleDateString())}</small></span>${u.role === "user" ? `<button class="btn btn-danger-ghost btn-sm" data-action="delete-user" data-username="${escapeHtml(u.username)}">Delete</button>` : ""}</div>`).join("");
+}
+
 async function openUserManagement() {
   if (currentRole !== "admin") return;
   try {
     document.getElementById("newUserForm").reset();
-    const data = await api("/api/v1/auth/users");
-    const list = document.getElementById("usersList");
-    list.innerHTML = data.users.map((u) => `<div class="user-row"><span><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.role)} ? added ${escapeHtml(new Date(u.created_at + "Z").toLocaleDateString())}</small></span>${u.role === "user" ? `<button class="btn btn-danger-ghost btn-sm" data-action="delete-user" data-username="${escapeHtml(u.username)}">Delete</button>` : ""}</div>`).join("");
+    await refreshUserList();
     document.getElementById("userMfaResult").hidden = true;
+    document.getElementById("userMfaQr").removeAttribute("src");
+    document.getElementById("userMfaSecret").value = "";
     openDialog("usersDialog");
   } catch (err) { showToast(err.message, "error"); }
 }
@@ -4137,16 +4145,16 @@ async function createUserAccount(event) {
     const result = await api("/api/v1/auth/users", { method: "POST", body: JSON.stringify({ username, password, role, enable_mfa: enableMfa }) });
     logActivity("user", `Created ${role} account`, username);
     event.target.reset();
-    document.getElementById("userMfaResult").hidden = true;
+    document.getElementById("userMfaResult").hidden = !result.mfa_enabled;
     if (result.mfa_enabled) {
+      document.getElementById("userMfaSetupTitle").textContent = `Authenticator setup for ${username}`;
       document.getElementById("userMfaQr").src = result.qr_data_url || "";
       document.getElementById("userMfaSecret").value = result.manual_secret || "";
-      document.getElementById("userMfaResult").hidden = false;
       showToast(`${role === "admin" ? "Administrator" : "User"} account created for ${username}. Microsoft Authenticator is enabled — share the QR code with the user.`, "success");
     } else {
       showToast(`${role === "admin" ? "Administrator" : "User"} account created for ${username}.`, "success");
     }
-    await openUserManagement();
+    await refreshUserList();
   } catch (err) { showToast(err.message, "error"); }
 }
 
@@ -4156,11 +4164,52 @@ async function deleteUserAccount(username) {
   catch (err) { showToast(err.message, "error"); }
 }
 
-function onAuthSuccess() {
+function openPasswordChange(forced = false) {
+  passwordChangeForced = forced;
+  const dialog = document.getElementById("changePasswordDialog");
+  document.getElementById("changePasswordForm").reset();
+  document.getElementById("changePasswordMessage").textContent = forced
+    ? "Your administrator gave you a temporary password. Change it now to continue."
+    : "Enter your current password and choose a new one.";
+  document.getElementById("closePasswordDialog").hidden = forced;
+  openDialog("changePasswordDialog");
+  setTimeout(() => document.getElementById("currentPassword").focus(), 0);
+}
+
+async function submitPasswordChange(event) {
+  event.preventDefault();
+  const currentPassword = document.getElementById("currentPassword").value;
+  const newPassword = document.getElementById("newPassword").value;
+  const confirmPassword = document.getElementById("confirmNewPassword").value;
+  if (newPassword !== confirmPassword) { showToast("The new passwords do not match.", "error"); return; }
+  try {
+    await api("/api/v1/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+    closeDialog("changePasswordDialog");
+    document.getElementById("changePasswordForm").reset();
+    const wasForced = passwordChangeForced;
+    passwordChangeForced = false;
+    showToast("Password updated successfully.", "success");
+    if (wasForced) {
+      startApp();
+      applyRoleUI();
+      showWelcomeExperience(authStoredUser());
+      logActivity("auth", "Temporary password changed", "First sign-in password update");
+    }
+  } catch (err) { showToast(err.message, "error"); }
+}
+
+function onAuthSuccess(user = {}) {
   document.documentElement.dataset.auth = "in";
   setUserChip(authStoredUser());
   hideAuthError();
   applyRoleUI();
+  if (user.password_change_required) {
+    openPasswordChange(true);
+    return;
+  }
   startApp();
   showWelcomeExperience(authStoredUser());
   logActivity("auth", "Operator authenticated", "Signed in");
@@ -4182,11 +4231,17 @@ function initAuth() {
   const passEl = document.getElementById("authPass");
   const mfaCode = document.getElementById("authMfaCode");
   const form = document.getElementById("authForm");
+  const changePasswordForm = document.getElementById("changePasswordForm");
+  const changePasswordDialog = document.getElementById("changePasswordDialog");
   const reveal = document.getElementById("authReveal");
   const logoutBtn = document.getElementById("logoutBtn");
   const welcomeContinue = document.getElementById("welcomeContinue");
 
   if (form) form.addEventListener("submit", submitAuth);
+  if (changePasswordForm) changePasswordForm.addEventListener("submit", submitPasswordChange);
+  if (changePasswordDialog) changePasswordDialog.addEventListener("cancel", (event) => {
+    if (passwordChangeForced) event.preventDefault();
+  });
   if (welcomeContinue) welcomeContinue.addEventListener("click", finishWelcomeExperience);
   document.addEventListener("keydown", (event) => {
     if (document.documentElement.dataset.welcome === "active" && event.key === "Escape") {
@@ -4227,7 +4282,11 @@ function initAuth() {
   typeAuthTagName("admin");
 
   if (isAuthed() && localStorage.getItem(AUTH_TOKEN_KEY)) {
-    api("/api/v1/auth/me").then((user) => { currentRole = user.role; setUserChip(user.username); startApp(); applyRoleUI(); /* showWelcomeExperience skipped on restore */ }).catch(() => logout());
+    api("/api/v1/auth/me").then((user) => {
+      currentRole = user.role;
+      if (user.password_change_required) onAuthSuccess(user);
+      else { setUserChip(user.username); startApp(); applyRoleUI(); }
+    }).catch(() => logout());
   } else {
     setTimeout(() => { if (userEl) userEl.focus(); }, 700);
   }

@@ -36,6 +36,10 @@ def initialize_users():
             conn.execute("ALTER TABLE users ADD COLUMN totp_secret_enc TEXT")
         if "totp_enabled" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0")
+        if "totp_confirmed" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN totp_confirmed INTEGER NOT NULL DEFAULT 0")
+        if "password_change_required" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN password_change_required INTEGER NOT NULL DEFAULT 0")
         conn.execute("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, username TEXT NOT NULL COLLATE NOCASE, role TEXT NOT NULL, expires_at REAL NOT NULL)")
         conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (time.time(),))
         if conn.execute("SELECT 1 FROM users WHERE role='admin' LIMIT 1").fetchone() is None:
@@ -64,6 +68,21 @@ def _verify_totp(secret: str, code: str) -> bool:
     return any(hmac.compare_digest(_totp_code(secret, now + offset * 30), code) for offset in (-1, 0, 1))
 
 
+def _mfa_setup_details(username: str, secret: str) -> dict:
+    label = quote(f"DBOps Control Plane:{username}", safe="")
+    issuer = quote("DBOps Control Plane", safe="")
+    otpauth_uri = f"otpauth://totp/{label}?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_Q, border=4)
+    qr.add_data(otpauth_uri)
+    qr.make(fit=True)
+    svg = qr.make_image(image_factory=SvgPathFillImage).to_string(encoding="unicode")
+    return {
+        "manual_secret": secret,
+        "otpauth_uri": otpauth_uri,
+        "qr_data_url": "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii"),
+    }
+
+
 def _create_user(conn, username, password, role):
     salt = secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 310000).hex()
@@ -73,19 +92,20 @@ def _create_user(conn, username, password, role):
 def authenticate(username: str, password: str) -> Optional[dict]:
     initialize_users()
     with sqlite3.connect(_db_path()) as conn:
-        row = conn.execute("SELECT username,password_hash,salt,role,totp_secret_enc,totp_enabled FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
+        row = conn.execute("SELECT username,password_hash,salt,role,totp_secret_enc,totp_enabled,totp_confirmed,password_change_required FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
     if not row:
         return None
     candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(row[2]), 310000).hex()
     if not hmac.compare_digest(candidate, row[1]):
         return None
-    return {"username": row[0], "role": row[3], "totp_secret_enc": row[4], "totp_enabled": bool(row[5])}
+    return {"username": row[0], "role": row[3], "totp_secret_enc": row[4], "totp_enabled": bool(row[5]), "totp_confirmed": bool(row[6]), "password_change_required": bool(row[7])}
 
 
 def begin_mfa_challenge(user: dict) -> dict:
     is_enrolled = bool(user.get("totp_enabled") and user.get("totp_secret_enc"))
     if not is_enrolled:
-        session_user = {"username": user["username"], "role": user["role"]}
+        session_user = {"username": user["username"], "role": user["role"],
+                        "password_change_required": user.get("password_change_required", False)}
         return {
             "mfa_required": False,
             "token": issue_session(session_user),
@@ -93,22 +113,32 @@ def begin_mfa_challenge(user: dict) -> dict:
         }
 
     challenge = secrets.token_urlsafe(32)
-    secret = None
+    setup_required = not user.get("totp_confirmed", False)
+    try:
+        secret = (_totp_cipher().decrypt(user["totp_secret_enc"].encode()).decode()
+                  if setup_required else None)
+    except (InvalidToken, ValueError):
+        raise HTTPException(500, "Could not read the saved authenticator setup. Check that AUTH_TOTP_ENCRYPTION_KEY has not changed.")
     with _lock:
         now = time.time()
         for key, value in list(_mfa_challenges.items()):
             if value["expires_at"] < now:
                 _mfa_challenges.pop(key, None)
         _mfa_challenges[challenge] = {
-            "username": user["username"], "role": user["role"], "mode": "verify",
-            "secret": user["totp_secret_enc"], "expires_at": now + 300, "attempts": 0,
+            "username": user["username"], "role": user["role"], "mode": "enroll" if setup_required else "verify",
+            "secret": secret if setup_required else user["totp_secret_enc"],
+            "password_change_required": user.get("password_change_required", False),
+            "expires_at": now + 300, "attempts": 0,
         }
-    return {
+    response = {
         "mfa_required": True,
         "challenge": challenge,
         "username": user["username"],
-        "setup_required": False,
+        "setup_required": setup_required,
     }
+    if setup_required:
+        response.update(_mfa_setup_details(user["username"], secret))
+    return response
 
 
 def complete_mfa_challenge(challenge: str, code: str) -> tuple[str, dict]:
@@ -136,9 +166,10 @@ def complete_mfa_challenge(challenge: str, code: str) -> tuple[str, dict]:
     if mode == "enroll":
         initialize_users()
         with sqlite3.connect(_db_path()) as conn:
-            conn.execute("UPDATE users SET totp_secret_enc=?, totp_enabled=1 WHERE username=? COLLATE NOCASE",
+            conn.execute("UPDATE users SET totp_secret_enc=?, totp_enabled=1, totp_confirmed=1 WHERE username=? COLLATE NOCASE",
                          (_totp_cipher().encrypt(secret.encode()).decode(), username))
-    user = {"username": pending["username"], "role": pending["role"]}
+    user = {"username": pending["username"], "role": pending["role"],
+            "password_change_required": pending.get("password_change_required", False)}
     return issue_session(user), user
 
 
@@ -150,6 +181,7 @@ def create_user(username: str, password: str, enable_mfa: bool = False, role: st
     with sqlite3.connect(_db_path()) as conn:
         try:
             _create_user(conn, username, password, role)
+            conn.execute("UPDATE users SET password_change_required=1 WHERE username=? COLLATE NOCASE", (username,))
         except sqlite3.IntegrityError:
             raise HTTPException(409, "That username already exists.")
     if enable_mfa:
@@ -158,20 +190,33 @@ def create_user(username: str, password: str, enable_mfa: bool = False, role: st
         with sqlite3.connect(_db_path()) as conn:
             conn.execute("UPDATE users SET totp_secret_enc=?, totp_enabled=1 WHERE username=? COLLATE NOCASE",
                          (encrypted, username))
-        label = quote(f"DBOps Control Plane:{username}", safe="")
-        issuer = quote("DBOps Control Plane", safe="")
-        otpauth_uri = f"otpauth://totp/{label}?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
-        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_Q, border=4)
-        qr.add_data(otpauth_uri)
-        qr.make(fit=True)
-        svg = qr.make_image(image_factory=SvgPathFillImage).to_string(encoding="unicode")
         result = {
             "mfa_enabled": True,
-            "manual_secret": secret,
-            "otpauth_uri": otpauth_uri,
-            "qr_data_url": "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii"),
+            **_mfa_setup_details(username, secret),
         }
     return result
+
+
+def change_password(username: str, current_password: str, new_password: str) -> None:
+    """Verify the current credential, rotate it, and clear forced-change state."""
+    initialize_users()
+    with sqlite3.connect(_db_path()) as conn:
+        row = conn.execute(
+            "SELECT password_hash,salt FROM users WHERE username=? COLLATE NOCASE", (username,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "User account not found.")
+        candidate = hashlib.pbkdf2_hmac("sha256", current_password.encode(), bytes.fromhex(row[1]), 310000).hex()
+        if not hmac.compare_digest(candidate, row[0]):
+            raise HTTPException(401, "Current password is incorrect.")
+        if hmac.compare_digest(current_password, new_password):
+            raise HTTPException(400, "Choose a new password different from the current password.")
+        salt = secrets.token_hex(16)
+        digest = hashlib.pbkdf2_hmac("sha256", new_password.encode(), bytes.fromhex(salt), 310000).hex()
+        conn.execute(
+            "UPDATE users SET password_hash=?,salt=?,password_change_required=0 WHERE username=? COLLATE NOCASE",
+            (digest, salt, username),
+        )
 
 
 def list_users():
@@ -229,9 +274,14 @@ async def current_user(request: Request):
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         initialize_users()
         with sqlite3.connect(_db_path()) as conn:
-            row = conn.execute("SELECT username,role,expires_at FROM sessions WHERE token_hash=?", (token_hash,)).fetchone()
+            row = conn.execute("SELECT s.username,s.role,s.expires_at,u.password_change_required FROM sessions s JOIN users u ON u.username=s.username WHERE s.token_hash=?", (token_hash,)).fetchone()
             if row and row[2] > time.time():
-                return {"username": row[0], "role": row[1]}
+                user = {"username": row[0], "role": row[1], "password_change_required": bool(row[3])}
+                if user["password_change_required"] and request.url.path not in {
+                    "/api/v1/auth/me", "/api/v1/auth/change-password", "/api/v1/auth/logout"
+                }:
+                    raise HTTPException(403, "Change your temporary password before using DBOps.")
+                return user
             if row:
                 conn.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
         with _lock:

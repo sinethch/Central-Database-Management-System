@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.auth import authenticate, begin_mfa_challenge, complete_mfa_challenge, current_user, require_admin, create_user, list_users, delete_user, revoke_session
+from app.auth import authenticate, begin_mfa_challenge, complete_mfa_challenge, current_user, require_admin, create_user, list_users, delete_user, revoke_session, change_password
 from app.activity_log import record_activity, list_activity, clear_activity as clear_activity_log
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -19,6 +19,10 @@ class NewUser(BaseModel):
 class MfaVerification(BaseModel):
     challenge: str = Field(min_length=20, max_length=128)
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
 
 class ActivityEvent(BaseModel):
     client_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
@@ -43,6 +47,11 @@ def verify_mfa(payload: MfaVerification, request: Request):
 @router.get("/me")
 async def me(user=Depends(current_user)):
     return user
+
+@router.post("/change-password")
+async def update_password(payload: PasswordChange, user=Depends(current_user)):
+    change_password(user["username"], payload.current_password, payload.new_password)
+    return {"password_changed": True, "user": {"username": user["username"], "role": user["role"], "password_change_required": False}}
 
 @router.post("/logout")
 async def logout(request: Request, user=Depends(current_user)):
