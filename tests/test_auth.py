@@ -22,7 +22,9 @@ def test_login_without_enrolled_mfa_issues_session(isolated_auth_db):
 
     assert result["mfa_required"] is False
     assert result["token"]
-    assert result["user"] == {"username": "no_mfa_user", "role": "user"}
+    assert result["user"] == {
+        "username": "no_mfa_user", "role": "user", "password_change_required": True,
+    }
     assert not auth._mfa_challenges
 
 
@@ -43,7 +45,9 @@ def test_login_with_enrolled_mfa_requires_verification(isolated_auth_db):
     code = auth._totp_code(result["manual_secret"])
     token, session_user = auth.complete_mfa_challenge(result["challenge"], code)
     assert token
-    assert session_user == {"username": "mfa_user", "role": "user"}
+    assert session_user == {
+        "username": "mfa_user", "role": "user", "password_change_required": True,
+    }
 
     verified = auth.begin_mfa_challenge(auth.authenticate("mfa_user", "a-secure-test-password"))
     assert verified["setup_required"] is False
