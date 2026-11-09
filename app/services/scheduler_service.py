@@ -88,19 +88,33 @@ class SchedulerService:
                     continue
 
                 known = set(state.get(target_id) or [])
-                new_entries = [item for item in entries if self._migration_signature(item) not in known]
-                for item in new_entries:
+                # Deduplicate rows within the current scan, then send one message
+                # per target containing every newly discovered migration.
+                new_entries_by_signature = {}
+                for item in entries:
+                    signature = self._migration_signature(item)
+                    if signature not in known:
+                        new_entries_by_signature.setdefault(signature, item)
+                new_entries = list(new_entries_by_signature.values())
+                if new_entries:
+                    target_name = history.get("database_name") or target.get("name") or target_id
+                    migration_lines = [
+                        f"• `{item.get('framework') or 'Unknown'}` · "
+                        f"`{item.get('version') or 'Not recorded'}` · "
+                        f"{item.get('name') or 'Not recorded'} · "
+                        f"Status: {item.get('status') or 'Unknown'}"
+                        for item in new_entries
+                    ]
+                    # Persist fingerprints before sending so delivery failures or
+                    # the next polling run cannot emit these records repeatedly.
+                    state[target_id] = sorted(known | current)[-5000:]
+                    self._save_migration_state(state)
+                    state_changed = False
                     await notification_service.notify(
                         "migration_detected",
-                        "Database migration detected",
-                        f"A new migration record was found on {history.get('database_name') or target.get('name') or target_id}.",
-                        {
-                            "Target": history.get("database_name") or target.get("name") or target_id,
-                            "Framework": item.get("framework") or "Unknown",
-                            "Version": item.get("version") or "Not recorded",
-                            "Migration": item.get("name") or "Not recorded",
-                            "Status": item.get("status") or "Unknown",
-                        },
+                        "Database migrations detected",
+                        f"{len(new_entries)} new migration record(s) were found on {target_name}.",
+                        {"Target": target_name, "Migrations": "\n".join(migration_lines)},
                         "WARNING",
                     )
                 if new_entries:
