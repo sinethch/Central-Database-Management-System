@@ -3375,17 +3375,29 @@ async function editServerPaths(serverId) {
 
 async function registerRemoteServer() {
   const btn = document.querySelector('[data-action="register-server"]');
+  const displayName = document.getElementById("serverName").value.trim();
   const host = document.getElementById("serverHost").value.trim();
   const sshPort = Number(document.getElementById("serverSshPort").value);
   const hostTarget = `${host}:${sshPort}`;
-  if (!pendingServerHostFingerprint || pendingServerHostTarget !== hostTarget || !document.getElementById("serverHostKeyVerified").checked) {
-    showToast("Inspect the host key and confirm that you verified its fingerprint before registering.", "warning");
+  if (!displayName || displayName.length > 120) {
+    setDialogFormNotice("serverFormNotice", "Enter a server display name between 1 and 120 characters. This is the label shown in DBOps.", "error");
+    document.getElementById("serverName").focus();
     return;
   }
+  if (!host) {
+    setDialogFormNotice("serverFormNotice", "Enter the server IP address or hostname that can be reached over SSH.", "error");
+    document.getElementById("serverHost").focus();
+    return;
+  }
+  if (!pendingServerHostFingerprint || pendingServerHostTarget !== hostTarget || !document.getElementById("serverHostKeyVerified").checked) {
+    setDialogFormNotice("serverFormNotice", "Inspect the SSH host key, compare its fingerprint with a trusted source, then confirm the verification checkbox.", "error");
+    return;
+  }
+  setDialogFormNotice("serverFormNotice", "", "info");
   setBusy(btn, true, "Checking SSH…");
   try {
     await api("/api/v1/servers", { method: "POST", body: JSON.stringify({
-      name: document.getElementById("serverName").value.trim(),
+      name: displayName,
       host,
       ssh_port: sshPort,
       username: document.getElementById("serverUsername").value.trim(),
@@ -3397,9 +3409,9 @@ async function registerRemoteServer() {
     document.getElementById("serverPassword").value = "";
     closeDialog("serverDialog");
     showToast("Remote server verified and registered.", "success");
-    logActivity("server", "Registered remote server", document.getElementById("serverName").value.trim());
+    logActivity("server", "Registered remote server", displayName);
     await fetchRemoteServers();
-  } catch (err) { showToast(`Server registration failed: ${err.message}`, "error"); }
+  } catch (err) { setDialogFormNotice("serverFormNotice", `Server registration failed: ${err.message}`, "error"); }
   finally { setBusy(btn, false); }
 }
 
@@ -3408,6 +3420,7 @@ function openServerRegistrationDialog() {
   pendingServerHostTarget = "";
   document.getElementById("serverHostKeyVerified").checked = false;
   document.getElementById("serverHostKeyFingerprint").textContent = "Inspect the host key before registering.";
+  setDialogFormNotice("serverFormNotice", "", "info");
   openDialog("serverDialog");
 }
 
@@ -3453,7 +3466,7 @@ function openProvisionDbDialog(serverId) {
     document.getElementById("provisionDbUserGroup").hidden = redis;
     document.getElementById("provisionDbName").required = !redis;
     document.getElementById("provisionDbUser").required = !redis;
-    document.getElementById("provisionDbPasswordLabel").textContent = redis ? "Redis password (16+ characters)" : "Database password (16+ characters)";
+    document.getElementById("provisionDbPasswordLabel").textContent = redis ? "Redis password (16–128 characters)" : "Database password (16–128 characters)";
     updateProvisionUrlFormat();
     checkProvisionPort();
   };
@@ -3539,15 +3552,19 @@ async function provisionPostgresContainer() {
   const portStatus = document.getElementById("provisionPortStatus");
   const hostPort = Number(document.getElementById("provisionPort").value);
   if (!Number.isInteger(hostPort) || hostPort < 1024 || hostPort > 65535 || portStatus.dataset.state === "used" || portStatus.dataset.state !== "free") {
-    setProvisionNotice("Choose a valid server port and wait for its availability check to confirm it is free.", "error");
+    setProvisionNotice("Server port must be 1024–65535 and confirmed free. Wait for the port check, or choose another port.", "error");
     checkProvisionPort();
     return;
   }
   const imagePatterns = { postgres: /^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/, mongodb: /^mongo:(6|7|8)(\.\d+)?(-[a-z0-9.-]+)?$/, mysql: /^(mysql:8(\.\d+)?|mariadb:10\.\d+|mariadb:11\.\d+)(-[a-z0-9.-]+)?$/, redis: /^redis:([7-9]|[1-9][0-9])(\.\d+)?(-[a-z0-9.-]+)?$/ };
   const hasDatabaseFields = engine !== "redis";
-  if (!state.provisionServerId || !name || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName) || (hasDatabaseFields && (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser))) || databasePassword.length < 16 || !imagePatterns[engine]?.test(image)) {
-    setProvisionNotice(`Provide a valid label and container name, ${hasDatabaseFields ? "database name and user, " : ""}a supported image, and a password of at least 16 characters.`, "error"); return;
-  }
+  if (!state.provisionServerId) { setProvisionNotice("Select a registered remote server first.", "error"); return; }
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test(name)) { setProvisionNotice("Display label must start with a letter and contain only letters, numbers, underscores, or hyphens (up to 63 characters).", "error"); document.getElementById("provisionName").focus(); return; }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(containerName)) { setProvisionNotice("Container name must start with a letter or number and contain only letters, numbers, dots, underscores, or hyphens (up to 63 characters). It must be unique on the server.", "error"); document.getElementById("provisionContainerName").focus(); return; }
+  if (hasDatabaseFields && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseName)) { setProvisionNotice("Database name must start with a letter or underscore and contain only letters, numbers, or underscores.", "error"); document.getElementById("provisionDbName").focus(); return; }
+  if (hasDatabaseFields && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(databaseUser)) { setProvisionNotice("Database user must start with a letter or underscore and contain only letters, numbers, or underscores.", "error"); document.getElementById("provisionDbUser").focus(); return; }
+  if (databasePassword.length < 16 || databasePassword.length > 128) { setProvisionNotice("Database password must be 16–128 characters.", "error"); document.getElementById("provisionDbPassword").focus(); return; }
+  if (!imagePatterns[engine]?.test(image)) { setProvisionNotice("Enter a supported image tag listed below the image field.", "error"); document.getElementById("provisionImage").focus(); return; }
   const btn = document.querySelector('[data-action="provision-database"]');
   setBusy(btn, true, "Creating container…");
   try {
@@ -4486,9 +4503,13 @@ function openPasswordChange(forced = false) {
   passwordChangeForced = forced;
   const dialog = document.getElementById("changePasswordDialog");
   document.getElementById("changePasswordForm").reset();
+  setDialogFormNotice("changePasswordNotice", "", "info");
   document.getElementById("changePasswordMessage").textContent = forced
     ? "Your administrator gave you a temporary password. Change it now to continue."
     : "Enter your current password and choose a new one.";
+  document.getElementById("changePasswordHint").textContent = forced
+    ? "Enter the temporary password in Current password. Choose a different password of at least 12 characters for New password."
+    : "Choose a different password of at least 12 characters. Your new password cannot match your current password.";
   document.getElementById("closePasswordDialog").hidden = forced;
   openDialog("changePasswordDialog");
   setTimeout(() => document.getElementById("currentPassword").focus(), 0);
@@ -4499,7 +4520,19 @@ async function submitPasswordChange(event) {
   const currentPassword = document.getElementById("currentPassword").value;
   const newPassword = document.getElementById("newPassword").value;
   const confirmPassword = document.getElementById("confirmNewPassword").value;
-  if (newPassword !== confirmPassword) { showToast("The new passwords do not match.", "error"); return; }
+  if (newPassword === currentPassword) {
+    setDialogFormNotice("changePasswordNotice", "Your new password must be different from your current password. Enter the temporary password as the current password, then choose a new one.", "error");
+    return;
+  }
+  if (newPassword.length < 12 || newPassword.length > 256) {
+    setDialogFormNotice("changePasswordNotice", "Choose a new password between 12 and 256 characters.", "error");
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setDialogFormNotice("changePasswordNotice", "The new password and confirmation do not match. Re-enter the same new password in both fields.", "error");
+    return;
+  }
+  setDialogFormNotice("changePasswordNotice", "", "info");
   try {
     await api("/api/v1/auth/change-password", {
       method: "POST",
@@ -4516,7 +4549,15 @@ async function submitPasswordChange(event) {
       showWelcomeExperience(authStoredUser());
       logActivity("auth", "Temporary password changed", "First sign-in password update");
     }
-  } catch (err) { showToast(err.message, "error"); }
+  } catch (err) { setDialogFormNotice("changePasswordNotice", err.message, "error"); }
+}
+
+function setDialogFormNotice(id, message, state = "info") {
+  const notice = document.getElementById(id);
+  if (!notice) return;
+  notice.textContent = message;
+  notice.dataset.state = state;
+  notice.hidden = !message;
 }
 
 function onAuthSuccess(user = {}) {

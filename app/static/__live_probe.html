@@ -717,8 +717,8 @@ document.documentElement.dataset.auth = "in";
   <dialog id="serverDialog" closedby="any" aria-labelledby="serverDialogTitle"><div class="dialog-content">
     <div class="dialog-head"><div><h3 id="serverDialogTitle" class="dialog-title">Register Remote Server</h3><p class="dialog-subtitle">SSH credentials are encrypted in the app registry. Remote files are limited to the directories entered below.</p></div></div>
     <div class="form-grid">
-      <div class="form-group"><label for="serverName">Server label</label><input id="serverName" class="form-control" placeholder="Backup host 1"></div>
-      <div class="form-group"><label for="serverHost">Server IP address</label><input id="serverHost" class="form-control mono" placeholder="10.0.0.12"></div>
+      <div class="form-group"><label for="serverName">Server display name</label><input id="serverName" class="form-control" placeholder="QA backup server" maxlength="120" required><small class="field-hint">A label shown in DBOps. Use 1–120 characters to identify this server; this does not change its hostname.</small></div>
+      <div class="form-group"><label for="serverHost">Server IP address or hostname</label><input id="serverHost" class="form-control mono" placeholder="10.0.0.12 or db.example.com" required><small class="field-hint">Enter the SSH-reachable host address, without a protocol prefix.</small></div>
       <div class="form-group"><label for="serverSshPort">SSH port</label><input id="serverSshPort" class="form-control" type="number" value="22" min="1" max="65535"></div>
       <div class="form-group"><label for="serverUsername">SSH username</label><input id="serverUsername" class="form-control" autocomplete="username"></div>
       <div class="form-group"><label for="serverPassword">SSH password</label><input id="serverPassword" class="form-control" type="password" autocomplete="new-password"></div>
@@ -733,11 +733,11 @@ document.documentElement.dataset.auth = "in";
     <div class="dialog-head"><div><h3 id="provisionDbTitle" class="dialog-title">Create Isolated PostgreSQL Container</h3><p id="provisionServerLabel" class="dialog-subtitle">New container and new data directory only. Existing containers are not changed.</p></div></div>
     <div id="provisionNotice" class="provision-notice" data-state="info" role="status" aria-live="polite" hidden></div>
     <div class="form-grid">
-      <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>
+      <div class="form-group"><label for="provisionName">Database display label</label><input id="provisionName" class="form-control" placeholder="QA_database" maxlength="63" required><small class="field-hint">Shown in DBOps Targets. Use 1–63 characters: start with a letter, then use letters, numbers, underscores, or hyphens.</small></div>
       <div class="form-group"><label for="provisionContainerName">Docker container name</label><input id="provisionContainerName" class="form-control mono" value="dbops-postgres" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" required><small class="field-hint">Letters, numbers, dots, underscores, and hyphens; must be unique on this server.</small></div>
       <div class="form-group"><label for="provisionDbName">Database name</label><input id="provisionDbName" class="form-control mono" value="appdb"></div>
-      <div class="form-group"><label for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"></div>
-      <div class="form-group"><label for="provisionDbPassword">Database password (16+ characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"></div>
+      <div class="form-group"><label for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"><small class="field-hint">Start with a letter or underscore; then use letters, numbers, or underscores (up to 63 characters).</small></div>
+      <div class="form-group"><label for="provisionDbPassword">Database password (16–128 characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"><small class="field-hint">Use 16–128 characters.</small></div>
       <div class="form-group"><label for="provisionPort">Server port</label><input id="provisionPort" class="form-control" type="number" value="55432" min="1024" max="65535"></div>
       <div class="form-group"><label>PostgreSQL image</label><div class="readonly-value">postgres:16-alpine</div></div>
     </div>
@@ -1071,7 +1071,7 @@ document.documentElement.dataset.auth = "in";
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=92"></script>
+  <script defer src="/static/app.js?v=93"></script>
 
 <script>
 window.addEventListener("load", function () {

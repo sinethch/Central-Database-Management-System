@@ -775,9 +775,10 @@
 
   <dialog id="serverDialog" closedby="any" aria-labelledby="serverDialogTitle"><div class="dialog-content">
     <div class="dialog-head"><div><h3 id="serverDialogTitle" class="dialog-title">Register Remote Server</h3><p class="dialog-subtitle">SSH credentials are encrypted in the app registry. Remote files are limited to the directories entered below.</p></div></div>
+    <div id="serverFormNotice" class="provision-notice" role="status" aria-live="polite" hidden></div>
     <div class="form-grid">
-      <div class="form-group"><label for="serverName">Server label</label><input id="serverName" class="form-control" placeholder="Backup host 1"></div>
-      <div class="form-group"><label for="serverHost">Server IP address</label><input id="serverHost" class="form-control mono" placeholder="10.0.0.12"></div>
+      <div class="form-group"><label for="serverName">Server display name</label><input id="serverName" class="form-control" placeholder="QA backup server" maxlength="120" required><small class="field-hint">A label shown in DBOps. Use 1–120 characters to identify this server; this does not change its hostname.</small></div>
+      <div class="form-group"><label for="serverHost">Server IP address or hostname</label><input id="serverHost" class="form-control mono" placeholder="10.0.0.12 or db.example.com" required><small class="field-hint">Enter the SSH-reachable host address, without a protocol prefix.</small></div>
       <div class="form-group"><label for="serverSshPort">SSH port</label><input id="serverSshPort" class="form-control" type="number" value="22" min="1" max="65535"></div>
       <div class="form-group form-grid-full"><button type="button" class="btn btn-secondary btn-sm" data-action="inspect-server-host-key">Inspect SSH host key</button><div id="serverHostKeyFingerprint" class="readonly-value mono" role="status">Inspect the host key before registering.</div></div>
       <div class="form-group form-grid-full"><label class="new-user-mfa-label"><input type="checkbox" id="serverHostKeyVerified"><span>I verified this fingerprint with a trusted server/provider source.</span></label></div>
@@ -795,11 +796,11 @@
     <div id="provisionNotice" class="provision-notice" data-state="info" role="status" aria-live="polite" hidden></div>
     <div class="form-grid">
       <div class="form-group"><label for="provisionEngine">Database engine</label><select id="provisionEngine" class="form-control"><option value="postgres">PostgreSQL</option><option value="mongodb">MongoDB</option><option value="mysql">MySQL / MariaDB</option><option value="redis">Redis</option></select></div>
-      <div class="form-group"><label for="provisionName">Display label</label><input id="provisionName" class="form-control" placeholder="QA database"></div>
+      <div class="form-group"><label for="provisionName">Database display label</label><input id="provisionName" class="form-control" placeholder="QA_database" maxlength="63" required><small class="field-hint">Shown in DBOps Targets. Use 1–63 characters: start with a letter, then use letters, numbers, underscores, or hyphens.</small></div>
       <div class="form-group"><label for="provisionContainerName">Docker container name</label><input id="provisionContainerName" class="form-control mono" value="dbops-postgres" maxlength="63" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" required><small class="field-hint">Letters, numbers, dots, underscores, and hyphens; must be unique on this server.</small></div>
       <div class="form-group" id="provisionDbNameGroup"><label id="provisionDbNameLabel" for="provisionDbName">Database name</label><input id="provisionDbName" class="form-control mono" value="appdb"></div>
-      <div class="form-group" id="provisionDbUserGroup"><label id="provisionDbUserLabel" for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"></div>
-      <div class="form-group" id="provisionDbPasswordGroup"><label id="provisionDbPasswordLabel" for="provisionDbPassword">Database password (16+ characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"></div>
+      <div class="form-group" id="provisionDbUserGroup"><label id="provisionDbUserLabel" for="provisionDbUser">Database user</label><input id="provisionDbUser" class="form-control mono" value="dbops"><small class="field-hint">Start with a letter or underscore; then use letters, numbers, or underscores (up to 63 characters).</small></div>
+      <div class="form-group" id="provisionDbPasswordGroup"><label id="provisionDbPasswordLabel" for="provisionDbPassword">Database password (16–128 characters)</label><input id="provisionDbPassword" class="form-control" type="password" autocomplete="new-password"><small class="field-hint">Use 16–128 characters.</small></div>
       <div class="form-group"><label for="provisionPort">Server port</label><input id="provisionPort" class="form-control" type="number" value="55432" min="1024" max="65535"></div>
       <div class="form-group"><label>Port availability</label><div id="provisionPortStatus" class="readonly-value" role="status" aria-live="polite">Select a server port to check.</div></div>
       <div class="form-group form-grid-full"><label>Connection URL preview</label><div id="provisionUrlFormat" class="readonly-value mono">postgresql://dbops:PASSWORD@SERVER_HOST:55432/appdb</div><small class="field-hint">The preview updates as you enter values. Reserved characters in credentials are percent-encoded.</small></div>
@@ -1140,8 +1141,10 @@
         <button class="icon-btn" id="closePasswordDialog" data-action="close-dialog" data-dialog="changePasswordDialog" aria-label="Close">Close</button>
       </div>
       <form id="changePasswordForm" class="dialog-body">
-        <div class="form-group"><label for="currentPassword">Current password</label><input id="currentPassword" class="form-control" type="password" autocomplete="current-password" required></div>
-        <div class="form-group"><label for="newPassword">New password (12+ characters)</label><input id="newPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
+        <div id="changePasswordNotice" class="provision-notice" role="status" aria-live="polite" hidden></div>
+        <p class="field-hint" id="changePasswordHint">Use the temporary password as your current password, then choose a different password of at least 12 characters.</p>
+        <div class="form-group"><label for="currentPassword">Current password (temporary password)</label><input id="currentPassword" class="form-control" type="password" autocomplete="current-password" required></div>
+        <div class="form-group"><label for="newPassword">New password (12–256 characters)</label><input id="newPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
         <div class="form-group"><label for="confirmNewPassword">Confirm new password</label><input id="confirmNewPassword" class="form-control" type="password" minlength="12" maxlength="256" autocomplete="new-password" required></div>
         <button class="btn btn-primary" type="submit">Update password</button>
       </form>
@@ -1156,6 +1159,6 @@
     </div>
   </noscript>
 
-  <script defer src="/static/app.js?v=92"></script>
+  <script defer src="/static/app.js?v=93"></script>
 </body>
 </html>
