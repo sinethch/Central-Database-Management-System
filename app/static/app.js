@@ -3689,14 +3689,21 @@ function formatScheduleNextRun(value) {
 function scheduleDescription() {
   const frequency = document.getElementById("scheduleFrequency").value;
   const time = document.getElementById("scheduleTime").value || "07:30";
+  const [localHour, localMinute] = time.split(":").map(Number);
+  const utcMinuteOfDay = (localHour * 60 + localMinute - 330 + 1440) % 1440;
+  const utcTimeLabel = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .format(new Date(Date.UTC(2024, 0, 1, Math.floor(utcMinuteOfDay / 60), utcMinuteOfDay % 60)));
+  const timeLabel = `${time} Sri Lanka time (${utcTimeLabel} UTC)`;
   let timing;
   if (frequency === "current") timing = "The current custom schedule will be kept.";
   else if (frequency === "weekly") {
     const day = document.getElementById("scheduleWeekday");
-    timing = `Snapshots will run every ${day.options[day.selectedIndex].text} at ${time} Sri Lanka time.`;
+    const converted = scheduleCronFromLocal(time, day.value);
+    const utcDay = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][scheduleWeekdays.indexOf(converted.weekday)];
+    timing = `Snapshots will run every ${day.options[day.selectedIndex].text} at ${timeLabel} (UTC schedule: ${utcDay} ${String(converted.hour).padStart(2, "0")}:${String(converted.minute).padStart(2, "0")}).`;
   } else if (frequency === "monthly") {
-    timing = `Snapshots will run on day ${document.getElementById("scheduleMonthDay").value} of each month at ${time} Sri Lanka time.`;
-  } else timing = `Snapshots will run every day at ${time} Sri Lanka time.`;
+    timing = `Snapshots will run on day ${document.getElementById("scheduleMonthDay").value} of each month at ${timeLabel}.`;
+  } else timing = `Snapshots will run every day at ${timeLabel}.`;
 
   const dbSelect = document.getElementById("scheduleDbId");
   const databaseName = dbSelect?.selectedOptions[0]?.textContent || "the selected database";
