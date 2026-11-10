@@ -2011,6 +2011,7 @@ html[data-welcome="active"] body { overflow: hidden; }
   --bg: #f1f4f8;
   --bg-2: #e9eef5;
   --panel: #ffffff;
+  --panel-solid: #ffffff;
   --panel-2: #f6f8fb;
   --panel-hover: #edf2f8;
   --panel-muted: #f8fafc;
@@ -3292,6 +3293,24 @@ th::after { content: ""; }
   border-color: var(--border);
   background: var(--panel);
 }
+[data-theme="light"] .card.interactive-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
+  background: linear-gradient(180deg, #ffffff 0%, #f6f8fb 100%);
+  box-shadow: 0 18px 42px rgba(24, 39, 60, .12), 0 0 28px rgba(37, 99, 235, .06);
+}
+[data-theme="light"] .table-responsive table,
+[data-theme="light"] .table-responsive tbody,
+[data-theme="light"] .table-responsive .table-empty,
+[data-theme="light"] .table-responsive .table-empty td {
+  color: var(--text-dim);
+  background-color: var(--panel);
+}
+[data-theme="light"] .table-responsive tbody tr:hover td { background: var(--panel-hover); }
+[data-theme="light"] .section-target-switcher {
+  border-color: var(--border);
+  background: var(--panel-solid);
+}
+[data-theme="light"] .section-target-switcher select { color: var(--text); }
 [data-theme="light"] .server-live-console {
   color: var(--text);
   border-color: var(--border);
