@@ -3657,14 +3657,25 @@ function closeServerOperationOutput() {
 
 const scheduleWeekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
-function sriLankaScheduleTime(utcTime, weekday = null) {
-  const [hour, minute] = (utcTime || "02:00").split(":").map(Number);
+function scheduleTimeFromCron(minute, hour, dayOfWeek = "*") {
+  const weekdayOffset = dayOfWeek === "*" ? 0 : scheduleWeekdays.indexOf(dayOfWeek);
+  const utcDate = new Date(Date.UTC(2024, 0, 1 + Math.max(weekdayOffset, 0), Number(hour), Number(minute)));
+  const localParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Colombo", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(utcDate).reduce((parts, part) => ({ ...parts, [part.type]: part.value }), {});
+  const localWeekday = scheduleWeekdays[ ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(localParts.weekday) ];
+  return { time: `${localParts.hour}:${localParts.minute}`, weekday: localWeekday };
+}
+
+function scheduleCronFromLocal(time, weekday = null) {
+  const [hour, minute] = (time || "02:00").split(":").map(Number);
   const weekdayOffset = weekday ? scheduleWeekdays.indexOf(weekday) : 0;
-  const date = new Date(Date.UTC(2024, 0, 1 + Math.max(weekdayOffset, 0), hour || 0, minute || 0));
-  const time = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Colombo", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
-  if (!weekday) return time;
-  const day = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Colombo", weekday: "long" }).format(date);
-  return `${day} ${time}`;
+  const localAsUtc = new Date(Date.UTC(2024, 0, 1 + Math.max(weekdayOffset, 0), hour || 0, minute || 0));
+  const utcDate = new Date(localAsUtc.getTime() - 330 * 60 * 1000);
+  const utcMinute = utcDate.getUTCMinutes();
+  const utcHour = utcDate.getUTCHours();
+  const utcWeekday = weekday ? scheduleWeekdays[(utcDate.getUTCDay() + 6) % 7] : "*";
+  return { minute: utcMinute, hour: utcHour, weekday: utcWeekday };
 }
 
 function formatScheduleNextRun(value) {
@@ -3677,15 +3688,15 @@ function formatScheduleNextRun(value) {
 
 function scheduleDescription() {
   const frequency = document.getElementById("scheduleFrequency").value;
-  const time = document.getElementById("scheduleTime").value || "02:00";
+  const time = document.getElementById("scheduleTime").value || "07:30";
   let timing;
   if (frequency === "current") timing = "The current custom schedule will be kept.";
   else if (frequency === "weekly") {
     const day = document.getElementById("scheduleWeekday");
-    timing = `Snapshots will run every ${day.options[day.selectedIndex].text} at ${time} UTC (Sri Lanka time: ${sriLankaScheduleTime(time, day.value)}).`;
+    timing = `Snapshots will run every ${day.options[day.selectedIndex].text} at ${time} Sri Lanka time.`;
   } else if (frequency === "monthly") {
-    timing = `Snapshots will run on day ${document.getElementById("scheduleMonthDay").value} of each month at ${time} UTC (Sri Lanka time: ${sriLankaScheduleTime(time)}).`;
-  } else timing = `Snapshots will run every day at ${time} UTC (Sri Lanka time: ${sriLankaScheduleTime(time)}).`;
+    timing = `Snapshots will run on day ${document.getElementById("scheduleMonthDay").value} of each month at ${time} Sri Lanka time.`;
+  } else timing = `Snapshots will run every day at ${time} Sri Lanka time.`;
 
   const dbSelect = document.getElementById("scheduleDbId");
   const databaseName = dbSelect?.selectedOptions[0]?.textContent || "the selected database";
@@ -3702,10 +3713,10 @@ function syncScheduleControls() {
   document.getElementById("scheduleWeekdayGroup").hidden = frequency !== "weekly";
   document.getElementById("scheduleMonthDayGroup").hidden = frequency !== "monthly";
   if (frequency !== "current") {
-    const [hour = "02", minute = "00"] = (document.getElementById("scheduleTime").value || "02:00").split(":");
+    const local = document.getElementById("scheduleTime").value || "07:30";
+    const converted = scheduleCronFromLocal(local, frequency === "weekly" ? document.getElementById("scheduleWeekday").value : null);
     const day = frequency === "monthly" ? document.getElementById("scheduleMonthDay").value : "*";
-    const weekday = frequency === "weekly" ? document.getElementById("scheduleWeekday").value : "*";
-    document.getElementById("scheduleCron").value = `${Number(minute)} ${Number(hour)} ${day} * ${weekday}`;
+    document.getElementById("scheduleCron").value = `${converted.minute} ${converted.hour} ${day} * ${frequency === "weekly" ? converted.weekday : "*"}`;
   }
   document.getElementById("schedulePreview").textContent = scheduleDescription();
 }
@@ -3724,8 +3735,9 @@ function loadScheduleControls(cron) {
   if (frequency) {
     customOption.hidden = true;
     selector.value = frequency;
-    document.getElementById("scheduleTime").value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    if (frequency === "weekly") document.getElementById("scheduleWeekday").value = dayOfWeek;
+    const local = scheduleTimeFromCron(minute, hour, frequency === "weekly" ? dayOfWeek : "*");
+    document.getElementById("scheduleTime").value = local.time;
+    if (frequency === "weekly") document.getElementById("scheduleWeekday").value = local.weekday;
     if (frequency === "monthly") document.getElementById("scheduleMonthDay").value = dayOfMonth;
   } else {
     customOption.hidden = false;

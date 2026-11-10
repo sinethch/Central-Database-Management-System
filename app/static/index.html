@@ -842,12 +842,12 @@
         </select>
       </div>
       <div class="form-grid schedule-options">
-        <div class="form-group" id="scheduleTimeGroup"><label for="scheduleTime">Time (UTC)</label><input type="time" id="scheduleTime" class="form-control" value="02:00"><small class="field-hint">The preview also shows this time in Sri Lanka time (SLST, UTC+5:30).</small></div>
+        <div class="form-group" id="scheduleTimeGroup"><label for="scheduleTime">Time (Sri Lanka)</label><input type="time" id="scheduleTime" class="form-control" value="07:30"><small class="field-hint">Enter the time using Sri Lanka local time (SLST, UTC+5:30).</small></div>
         <div class="form-group" id="scheduleWeekdayGroup" hidden><label for="scheduleWeekday">Day of the week</label><select id="scheduleWeekday" class="form-control"><option value="mon">Monday</option><option value="tue">Tuesday</option><option value="wed">Wednesday</option><option value="thu">Thursday</option><option value="fri">Friday</option><option value="sat">Saturday</option><option value="sun">Sunday</option></select></div>
         <div class="form-group" id="scheduleMonthDayGroup" hidden><label for="scheduleMonthDay">Day of the month</label><select id="scheduleMonthDay" class="form-control"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option></select><small class="field-hint">Choose 1–28 so the selected day exists every month.</small></div>
       </div>
       <input type="hidden" id="scheduleCron" value="0 2 * * *">
-      <div class="schedule-preview" id="schedulePreview" aria-live="polite">Snapshots will run every day at 02:00 UTC (Sri Lanka time: 7:30 AM).</div>
+      <div class="schedule-preview" id="schedulePreview" aria-live="polite">Snapshots will run every day at 07:30 Sri Lanka time.</div>
       <div class="form-group">
         <label for="scheduleEnabled">Status</label>
         <select id="scheduleEnabled" class="form-control"><option value="true" selected>Active</option><option value="false">Disabled</option></select>
