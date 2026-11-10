@@ -3452,6 +3452,8 @@ function openProvisionDbDialog(serverId) {
   const server = state.remoteServers.find((item) => item.id === serverId);
   if (!server) return;
   state.provisionServerId = serverId;
+  provisionPortCheckToken += 1;
+  clearTimeout(provisionPortCheckTimer);
   setProvisionNotice("", "info");
   const engineSelect = document.getElementById("provisionEngine");
   const engineDefaults = { postgres: ["postgres:16-alpine", 55432, "dbops-postgres"], mongodb: ["mongo:7", 57017, "dbops-mongodb"], mysql: ["mysql:8", 53306, "dbops-mysql"], redis: ["redis:7-alpine", 56379, "dbops-redis"] };
@@ -3504,6 +3506,7 @@ function updateProvisionUrlFormat() {
 }
 
 let provisionPortCheckTimer;
+let provisionPortCheckToken = 0;
 function setProvisionNotice(message, type = "info") {
   const notice = document.getElementById("provisionNotice");
   if (!notice) return;
@@ -3514,31 +3517,38 @@ function setProvisionNotice(message, type = "info") {
   notice.hidden = !message;
 }
 
-async function checkProvisionPort() {
+async function checkProvisionPort({ immediate = false } = {}) {
   updateProvisionUrlFormat();
   const status = document.getElementById("provisionPortStatus");
   const serverId = state.provisionServerId;
   const port = Number(document.getElementById("provisionPort").value);
+  const token = ++provisionPortCheckToken;
+  clearTimeout(provisionPortCheckTimer);
   if (!serverId || !Number.isInteger(port) || port < 1024 || port > 65535) {
     status.textContent = "Enter a port from 1024 to 65535.";
     status.dataset.state = "unknown";
-    return;
+    return false;
   }
-  clearTimeout(provisionPortCheckTimer);
   status.textContent = "Checking server…";
   status.dataset.state = "checking";
   const checkedPort = port;
-  provisionPortCheckTimer = setTimeout(async () => {
+  const performCheck = async () => {
     try {
       const result = await api(`/api/v1/servers/${encodeURIComponent(serverId)}/ports/${checkedPort}`);
-      if (serverId !== state.provisionServerId || checkedPort !== Number(document.getElementById("provisionPort").value)) return;
+      if (token !== provisionPortCheckToken || serverId !== state.provisionServerId || checkedPort !== Number(document.getElementById("provisionPort").value)) return false;
       status.textContent = result.available ? `Port ${checkedPort} is free.` : `Port ${checkedPort} is in use by ${result.users.join(", ") || "a running container"}.`;
       status.dataset.state = result.available ? "free" : "used";
+      return Boolean(result.available);
     } catch (err) {
+      if (token !== provisionPortCheckToken) return false;
       status.textContent = `Could not check port: ${err.message}`;
       status.dataset.state = "unknown";
+      return false;
     }
-  }, 300);
+  };
+  if (immediate) return performCheck();
+  provisionPortCheckTimer = setTimeout(performCheck, 300);
+  return undefined;
 }
 
 async function provisionPostgresContainer() {
@@ -3549,11 +3559,14 @@ async function provisionPostgresContainer() {
   const databaseUser = document.getElementById("provisionDbUser").value.trim();
   const databasePassword = document.getElementById("provisionDbPassword").value;
   const image = document.getElementById("provisionImage").value.trim();
-  const portStatus = document.getElementById("provisionPortStatus");
   const hostPort = Number(document.getElementById("provisionPort").value);
-  if (!Number.isInteger(hostPort) || hostPort < 1024 || hostPort > 65535 || portStatus.dataset.state === "used" || portStatus.dataset.state !== "free") {
-    setProvisionNotice("Server port must be 1024–65535 and confirmed free. Wait for the port check, or choose another port.", "error");
-    checkProvisionPort();
+  if (!Number.isInteger(hostPort) || hostPort < 1024 || hostPort > 65535) {
+    setProvisionNotice("Server port must be a whole number from 1024 to 65535.", "error");
+    return;
+  }
+  const portIsFree = await checkProvisionPort({ immediate: true });
+  if (!portIsFree) {
+    setProvisionNotice("Could not confirm this server port is free. Check the status above and try again, or choose another port.", "error");
     return;
   }
   const imagePatterns = { postgres: /^postgres:(1[4-9]|[2-9][0-9])(-alpine)?$/, mongodb: /^mongo:(6|7|8)(\.\d+)?(-[a-z0-9.-]+)?$/, mysql: /^(mysql:8(\.\d+)?|mariadb:10\.\d+|mariadb:11\.\d+)(-[a-z0-9.-]+)?$/, redis: /^redis:([7-9]|[1-9][0-9])(\.\d+)?(-[a-z0-9.-]+)?$/ };
