@@ -82,9 +82,33 @@ class SchedulerService:
                 entries = history.get("migrations") or []
                 current = {self._migration_signature(item) for item in entries}
                 if target_id not in state:
-                    # First successful scan establishes the baseline without sending
-                    # alerts for migrations that predate monitoring.
-                    state[target_id] = sorted(current)
+                    # Newly registered targets have no history yet. Treat their
+                    # first successful scan as discovery so existing migration
+                    # records are not silently missed. Persist even an empty
+                    # baseline to distinguish a target with no migrations from
+                    # one that has never been scanned successfully.
+                    new_entries_by_signature = {
+                        self._migration_signature(item): item for item in entries
+                    }
+                    new_entries = list(new_entries_by_signature.values())
+                    target_name = history.get("database_name") or target.get("name") or target_id
+                    if new_entries:
+                        migration_lines = [
+                            f"• `{item.get('framework') or 'Unknown'}` · "
+                            f"`{item.get('version') or 'Not recorded'}` · "
+                            f"{item.get('name') or 'Not recorded'} · "
+                            f"Status: {item.get('status') or 'Unknown'}"
+                            for item in new_entries
+                        ]
+                        await notification_service.notify(
+                            "migration_detected",
+                            "Database migrations detected",
+                            f"{len(new_entries)} migration record(s) were found on {target_name} during initial monitoring.",
+                            {"Target": target_name, "Migrations": "\n".join(migration_lines)},
+                            "WARNING",
+                        )
+                        logger.info("Discovered %d migration record(s) for newly monitored target %s.", len(new_entries), target_id)
+                    state[target_id] = sorted(current)[-5000:]
                     state_changed = True
                     continue
 

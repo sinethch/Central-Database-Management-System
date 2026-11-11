@@ -1,0 +1,228 @@
+%PDF-1.4
+%DBOps
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 4423 >>
+stream
+0.09 0.13 0.20 rg
+BT /F2 19 Tf 1 0 0 1 46 747 Tm (DBOps Operator Guide) Tj ET
+0.35 0.41 0.50 rg
+BT /F1 10.5 Tf 1 0 0 1 46 726 Tm (Daily operations, backup, recovery, and safe administration) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 702.3 Tm (Purpose and operating model) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 688.1 Tm (DBOps is a self-hosted control plane for registering database targets, monitoring health, operating PostgreSQL) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 676.4 Tm (snapshots, and managing remote database hosts. Select and verify the target before any action. Dashboard monitoring) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 664.7 Tm (is separate from changes made directly in an external database.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 646 Tm (1. Sign in and orient yourself) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 631.8 Tm (Sign in with your assigned account. If MFA is enabled, complete the Microsoft Authenticator step. At first sign-in) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 620.1 Tm (after a password reset, enter the temporary password as Current password and choose a different new password of at) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 608.4 Tm (least 12 characters.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 596.7 Tm (Console manages targets and servers; Overview shows health and performance; Backups handles snapshots; Restore) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 585 Tm (Center and Restored DBs handle recovery; Data Browser is read-only; Activity records recent operator actions.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 573.3 Tm (The active-target selector changes the database used by monitoring and relevant actions. Confirm its name before) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 561.6 Tm (pinging, browsing, taking a snapshot, or starting a restore. Backup schedules select their own source database.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 549.9 Tm (Refresh reloads metrics. Live refresh can be paused. The theme toggle changes appearance. Ctrl+K \(Command+K on Mac\)) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 538.2 Tm (opens the command palette.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 519.5 Tm (2. Register and manage database targets) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 505.3 Tm (Choose Add database instance in Console and enter a clear display name, engine, and connection details. Registration) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 493.6 Tm (stores a connection record; it does not copy, create, or migrate the database. Test connectivity before relying on) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 481.9 Tm (monitoring. Use the narrowest database permissions practical.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 470.2 Tm (Supported engines are PostgreSQL, MongoDB, MySQL/MariaDB, and Redis. Metric coverage differs by engine and) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 458.5 Tm (permissions. Snapshots, archive verification, and restore currently support PostgreSQL only.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 446.8 Tm (Changing a display name changes only its DBOps label. Unregistering removes only the app record. Treat full) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 435.1 Tm (connection URLs as credentials.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 416.4 Tm (3. Read the dashboard and inspect data) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 402.2 Tm (Overview presents connectivity and available signals such as connections, database size, cache ratios, slow queries,) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 390.5 Tm (deadlocks, and recognized migration history. Missing data can reflect engine limits, permissions, or connectivity. A) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 378.8 Tm (green dashboard is not a substitute for database monitoring.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 367.1 Tm (Migration History reads recognized PostgreSQL migration ledger tables. It reports records; it never applies or) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 355.4 Tm (reverses migrations.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 343.7 Tm (Data Browser performs read-only inspection and returns at most 200 rows per request.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 332 Tm (Ping checks connectivity. Kill cancels a running query and can disrupt an application. Confirm the target and query) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 320.3 Tm (before using it.) Tj ET
+0.4 0.46 0.56 rg
+BT /F1 8 Tf 1 0 0 1 46 28 Tm (DBOps Operator Guide | Page 1 of 3) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 4490 >>
+stream
+0.39 0.45 0.54 rg
+BT /F1 8 Tf 1 0 0 1 46 750 Tm (DBOps Operator Guide) Tj ET
+0.09 0.13 0.20 rg
+BT /F2 16 Tf 1 0 0 1 46 734.3 Tm (Backup and recovery workflows) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 709.3 Tm (4. Create and verify PostgreSQL snapshots) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 695.1 Tm (Open Backups and choose Take Snapshot. Confirm the PostgreSQL target, archive format, compression, optional) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 683.4 Tm (encryption, and description. Manual snapshots are stored locally. Select remote servers for additional copies. Wait) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 671.7 Tm (for completion and review copy-verification details.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 660 Tm (Custom archive is recommended for flexible pg_restore recovery. Plain SQL is useful for script-oriented workflows.) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 648.3 Tm (Encrypted archives require the configured key; losing or changing it can make them unreadable.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 636.6 Tm (Verify checks archive integrity but does not test application recovery. Download retrieves a local archive. Deleting) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 624.9 Tm (the local snapshot removes only its local archive and entry; remote copies remain.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 606.2 Tm (5. Configure an automated schedule) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 592 Tm (Open Backup Schedule, choose the PostgreSQL source, select daily, weekly, or monthly, enter Sri Lanka local time,) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 580.3 Tm (and set Active. The editor converts the time to UTC and shows both zones for the next run. Default: daily at 07:30) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 568.6 Tm (Sri Lanka time \(02:00 UTC\). Weekly schedules use the selected Sri Lankan weekday. Monthly schedules allow days 128.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 556.9 Tm (Every scheduled snapshot is first stored locally. Selected mounted repositories and remote servers receive) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 545.2 Tm (checksum-verified copies. The schedule source is independent of the active dashboard target.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 533.5 Tm (After saving, review source, status, destinations, and next run. Keep a loaded custom schedule only if it remains) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 521.8 Tm (intended. Disabled pauses future runs.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 503.1 Tm (6. Restore safely) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 488.9 Tm (In Restore Center, select a completed snapshot and inspect source, timestamp, format, and available local or) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 477.2 Tm (verified remote copy. Choose a registered PostgreSQL destination. Prefer a new, unused database name to protect the) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 465.5 Tm (original. Remote copies support new-database restores only.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 453.8 Tm (A new-database restore requires the exact phrase RESTORE. Writing into an existing database requires RESTORE) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 442.1 Tm (EXISTING and writes snapshot objects and data into that database. This can disrupt workloads or replace data; verify) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 430.4 Tm (source and destination before confirming.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 418.7 Tm (Follow job status and logs to completion. Snapshot exports omit owner and privilege settings; configure roles,) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 407 Tm (grants, and ownership separately when required.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 395.3 Tm (Restored DBs lists clone restores. Add to Targets registers one for monitoring. Remove from Targets unregisters it) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 383.6 Tm (but does not delete its database.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 364.9 Tm (7. Recovery readiness) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 350.7 Tm (Check that scheduled snapshots complete, remote copies show checksum verification, and storage capacity is) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 339 Tm (sufficient. Default local retention is 14 days. Back up encryption keys separately from encrypted archives.) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 327.3 Tm (Periodically restore into a disposable database and confirm the application can use it.) Tj ET
+0.4 0.46 0.56 rg
+BT /F1 8 Tf 1 0 0 1 46 28 Tm (DBOps Operator Guide | Page 2 of 3) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 5878 >>
+stream
+0.39 0.45 0.54 rg
+BT /F1 8 Tf 1 0 0 1 46 750 Tm (DBOps Operator Guide) Tj ET
+0.09 0.13 0.20 rg
+BT /F2 16 Tf 1 0 0 1 46 734.3 Tm (Remote infrastructure, administration, and response) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 709.3 Tm (8. Register servers and provision containers) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 695.1 Tm (Register a remote Linux Docker server with a display name, SSH-reachable host, port, account, and permitted) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 683.4 Tm (database/snapshot paths. Inspect its SSH fingerprint, compare it with a trusted provider or server source, and) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 671.7 Tm (confirm verification. Use absolute Linux paths whose parent directories already exist. SSH credentials are encrypted) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 660 Tm (in the app registry.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 648.3 Tm (Server health and managed-container panels report connectivity, resources, and DBOps-created containers. Renaming) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 636.6 Tm (changes only the app label. Removing registration does not stop containers or delete files.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 624.9 Tm (Provisioning requests engine, DBOps label, unique container name, database name/user \(except Redis\), password of) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 613.2 Tm (16128 characters, supported image, and host port. Review the connection URL and destination before creating.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 601.5 Tm (The app checks that the host port is free, then checks again before creation. This is a point-in-time check; Docker) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 589.8 Tm (final bind is authoritative. New containers and data directories are created under configured paths; existing) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 578.1 Tm (containers are not changed.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 559.4 Tm (9. Storage, notifications, and alerts) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 545.2 Tm (Mounted storage targets provide repository destinations. Registered remote servers provide SSH copy destinations.) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 533.5 Tm (Confirm copies are completed and checksum-verified before relying on them for recovery.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 521.8 Tm (Alerts can use thresholds for connection saturation, cache efficiency, slow queries, and migration-ledger changes.) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 510.1 Tm (Telegram, email, and webhook channels may be configured; test delivery and protect tokens and recipient details.) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 498.4 Tm (Alerts are investigation signals, not proof of impact or a completed fix.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 479.7 Tm (10. Users and access) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 465.5 Tm (Administrators create accounts with the correct role and optional MFA. If MFA is enabled, securely deliver the) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 453.8 Tm (individual QR code or setup key. Password resets sign the user out and require a new password at next sign-in; MFA) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 442.1 Tm (remains enabled. Admin has additional account-management authority. Avoid shared accounts.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 423.4 Tm (11. Operational safety and troubleshooting) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 409.2 Tm (Connection failure: verify active target, host and port, credentials, network route, firewall, and database) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 397.5 Tm (permissions; then test again.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 385.8 Tm (SSH or provisioning failure: verify host reachability and fingerprint, SSH/Docker access, absolute paths, supported) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 374.1 Tm (image, unique container name, password limits, and port. Verify host-key changes with a trusted source; never bypass) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 362.4 Tm (host-key checking.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 350.7 Tm (Snapshot or restore failure: record the job ID and redacted error, check disk space and destination permissions,) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 339 Tm (confirm encryption key, and ensure a new database name is unused. Do not retry an existing-database restore until) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 327.3 Tm (its impact is understood.) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 315.6 Tm (Use Activity to correlate actions and timestamps. Never share passwords, API keys, full connection URLs, MFA setup) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 303.9 Tm (codes, private keys, or unredacted logs.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 285.2 Tm (12. What DBOps does not do) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 271 Tm (DBOps is an operations interface, not a managed database service. Registration does not guarantee credentials are) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 259.3 Tm (read-only. Migration history does not roll migrations back. Ping does not certify health, and archive verification) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 247.6 Tm (does not prove application recovery. Removing a registration does not delete underlying data. Maintain independent) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 235.9 Tm (access controls, monitoring, backups, and tested recovery procedures.) Tj ET
+0.11 0.30 0.72 rg
+BT /F2 11.2 Tf 1 0 0 1 46 217.2 Tm (Operator closeout) Tj ET
+0.15 0.20 0.29 rg
+BT /F1 9.1 Tf 1 0 0 1 46 203 Tm (Before ending a maintenance window, record the target and operator, confirm snapshot and copy status, capture) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 191.3 Tm (restore outcomes, review alerts and Activity, and communicate unresolved failures through the approved incident) Tj ET
+BT /F1 9.1 Tf 1 0 0 1 46 179.6 Tm (process.) Tj ET
+0.4 0.46 0.56 rg
+BT /F1 8 Tf 1 0 0 1 46 28 Tm (DBOps Operator Guide | Page 3 of 3) Tj ET
+endstream
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000016 00000 n 
+0000000065 00000 n 
+0000000134 00000 n 
+0000000231 00000 n 
+0000000333 00000 n 
+0000000469 00000 n 
+0000004944 00000 n 
+0000005080 00000 n 
+0000009622 00000 n 
+0000009759 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+15690
+%%EOF
