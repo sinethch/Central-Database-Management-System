@@ -29,6 +29,8 @@ MIGRATION_SOURCES = [
         SELECT app || '.' || name, app || '.' || name, applied, 'applied'
         FROM django_migrations ORDER BY applied DESC LIMIT 100
     """),
+    # Alembic stores only the current head(s), not an append-only history.
+    # It still must be monitored because it is a common migration framework.
     ("Alembic", "alembic_version", """
         SELECT version_num, version_num, NULL::timestamptz, 'current revision'
         FROM alembic_version ORDER BY version_num LIMIT 100
@@ -81,6 +83,9 @@ class MigrationHistoryService:
                     continue
                 found.append(framework)
                 try:
+                    # Keep each ledger read isolated. A table may exist but
+                    # have a schema variant or permissions that prevent reading;
+                    # continue monitoring the other recognized frameworks.
                     rows = await conn.fetch(query)
                     migrations.extend({
                         "framework": framework,

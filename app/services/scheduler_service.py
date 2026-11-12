@@ -51,10 +51,9 @@ class SchedulerService:
 
     @staticmethod
     def _migration_signature(item: Dict[str, Any]) -> str:
-        stable_fields = {
-            key: item.get(key)
-            for key in ("framework", "version", "name", "applied_at", "status")
-        }
+        # Status and timestamps can change while a migration is being applied
+        # (or on each read for some ledgers). Identify the migration itself.
+        stable_fields = {key: item.get(key) for key in ("framework", "version", "name")}
         return hashlib.sha256(
             json.dumps(stable_fields, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
@@ -77,7 +76,9 @@ class SchedulerService:
                 continue
             try:
                 history = await migration_history_service.get_history(target_id)
-                if not history.get("supported"):
+                if not history.get("supported") or history.get("status") == "partial":
+                    # A partial read is not a complete snapshot. Advancing the
+                    # baseline here could permanently suppress an unread entry.
                     continue
                 entries = history.get("migrations") or []
                 current = {self._migration_signature(item) for item in entries}
