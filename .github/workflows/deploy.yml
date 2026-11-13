@@ -62,9 +62,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           INPUT_VERSION: ${{ inputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           if [[ "$EVENT_NAME" == "push" && "$REF_NAME" == "main" ]]; then
-            RELEASE_VERSION="v1.0.0-${GITHUB_SHA:0:7}"
+            RELEASE_VERSION="v1.0.${RUN_NUMBER}"
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             RELEASE_VERSION="$INPUT_VERSION"
           else
