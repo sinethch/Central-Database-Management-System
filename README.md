@@ -139,7 +139,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
 
 ## CI/CD deployment with GitHub Actions, GHCR, and Nginx
 
-The workflow in `.github/workflows/deploy.yml` runs the existing pytest suite for pull requests and pushes to `main`. Production releases are published from semantic version tags such as `v1.2.3`: push the tag (or create a GitHub Release using that tag) to run CI, publish the versioned and `latest` image tags to GitHub Container Registry (GHCR), then deploy that specific version over SSH. Manual workflow runs require a version such as `v1.2.3`. Production does not deploy from `latest`. Configure a GitHub Actions environment named `production`; configure required reviewers there if production deployments need approval.
+The workflow in `.github/workflows/deploy.yml` runs the existing pytest suite for pull requests and pushes to `main`. Every push to `main` publishes and deploys an image tagged `v1.0.0-<short-commit-sha>`, for example `v1.0.0-a1b2c3d`, and updates `latest`. For named production releases, push a semantic version tag such as `v1.2.3` (or create a GitHub Release using that tag); the workflow publishes and deploys that exact version and updates `latest`. Manual workflow runs require a version such as `v1.2.3`. Production deploys the explicit version tag, not `latest`. Configure a GitHub Actions environment named `production`; configure required reviewers there if production deployments need approval.
 
 ### Prepare the Linux server once
 
@@ -166,7 +166,7 @@ Do not disable SSH host-key checking or use an unverified `ssh-keyscan` result a
 
 ### Deployment and rollback
 
-Merge or push to `main` to run CI. Once ready to release, push a tag named with the next semantic version (`vMAJOR.MINOR.PATCH`, for example `v1.2.3`) or create a GitHub Release using that tag. The tag runs CI, builds and publishes the versioned image, then deploys that version. Review the Actions run and the server’s container health after deployment. The production Compose file exposes only localhost, leaving Nginx and Certbot on the host to serve HTTPS.
+Every push to `main` runs CI, builds an image tagged with the base version and short commit SHA, and deploys it. For a named release, push a tag using the next semantic version (`vMAJOR.MINOR.PATCH`, for example `v1.2.3`) or create a GitHub Release using that tag. Review the Actions run and the server’s container health after deployment. The production Compose file exposes only localhost, leaving Nginx and Certbot on the host to serve HTTPS.
 
 To roll back, SSH to the server and run:
 
