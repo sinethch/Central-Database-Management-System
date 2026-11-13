@@ -7,7 +7,8 @@
   <script>
     (function () {
       try {
-        var theme = localStorage.getItem("dbops_theme");
+        var requested = new URLSearchParams(window.location.search).get("theme");
+        var theme = requested === "light" || requested === "dark" ? requested : localStorage.getItem("dbops_theme");
         if (theme !== "light" && theme !== "dark") theme = "dark";
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;

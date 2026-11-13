@@ -241,7 +241,7 @@ document.documentElement.dataset.auth = "in";
         <button class="icon-btn" id="autoRefreshBtn" data-action="toggle-autorefresh" title="Pause live refresh" aria-label="Toggle auto refresh" type="button"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
       </div>
       <button class="btn btn-secondary btn-sm" data-action="open-notifications" type="button" title="Telegram notifications"><svg class="ico ico-sm" aria-hidden="true"><use href="#i-bell"/></svg> Alerts</button>
-      <a href="/static/user-manual.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="Open the DBOps user manual">User Manual</a>
+      <a href="/static/user-manual.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="Open the DBOps user manual" onclick="this.href='/static/user-manual.html?theme='+encodeURIComponent(document.documentElement.dataset.theme||'dark')">User Manual</a>
       <button class="btn btn-secondary btn-sm admin-only" data-action="open-users" type="button">Users</button>
       <div class="user-chip" id="userChip" title="Signed in">
         <span class="user-chip-avatar" id="userChipAvatar">A</span>
