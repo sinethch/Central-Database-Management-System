@@ -4,17 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0a0c11">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("dbops_theme");
+        if (theme !== "light" && theme !== "dark") theme = "dark";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", theme === "light" ? "#f1f4f8" : "#0a0c11");
+      } catch (e) {
+        document.documentElement.dataset.theme = "dark";
+      }
+    })();
+  </script>
   <title>DBOps User Manual</title>
   <style>
     :root { color-scheme: dark; --bg:#0a0c11; --panel:#101420; --panel2:#141926; --border:#273044; --text:#e9edf4; --dim:#a6b0c0; --muted:#758197; --accent:#8aa7ff; --warn:#f2c15b; --good:#66d28a; }
+    :root[data-theme="light"] { color-scheme:light; --bg:#f1f4f8; --panel:#fff; --panel2:#f5f7fb; --border:#d7deea; --text:#182235; --dim:#42516a; --muted:#64748b; --accent:#315fc2; --warn:#9a6700; --good:#187044; }
     * { box-sizing:border-box; }
     html { scroll-behavior:smooth; }
     body { margin:0; background:radial-gradient(ellipse at top right,rgba(91,140,255,.12),transparent 45%),var(--bg); color:var(--text); font:15px/1.65 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    :root[data-theme="light"] body { background:radial-gradient(ellipse at top right,rgba(49,95,194,.08),transparent 45%),var(--bg); }
     a { color:var(--accent); }
     .manual-wrap { width:min(1120px,calc(100% - 32px)); margin:32px auto 80px; }
     .manual-top { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:22px; }
     .manual-top a,.manual-top button { border:1px solid var(--border); border-radius:8px; background:var(--panel2); color:var(--text); padding:9px 13px; text-decoration:none; cursor:pointer; font:inherit; }
-    .manual-hero,.manual-card,.manual-toc { border:1px solid var(--border); border-radius:14px; background:rgba(16,20,32,.94); }
+    .manual-hero,.manual-card,.manual-toc { border:1px solid var(--border); border-radius:14px; background:var(--panel); }
     .manual-hero { padding:30px clamp(20px,5vw,52px); margin-bottom:18px; }
     .eyebrow { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.15em; text-transform:uppercase; }
     h1 { margin:6px 0 8px; font-size:clamp(30px,5vw,46px); line-height:1.15; }
@@ -32,6 +48,7 @@
     li { margin:5px 0; padding-left:3px; }
     strong { color:var(--text); }
     code { color:#c5d2ff; background:#0b0e15; border:1px solid #232b3b; padding:1px 5px; border-radius:5px; font-family:ui-monospace,Consolas,monospace; font-size:.92em; }
+    :root[data-theme="light"] code { color:#234fa8; background:#eef2f8; border-color:#d7deea; }
     .callout { border-left:3px solid var(--accent); background:rgba(91,140,255,.08); padding:12px 14px; margin:12px 0; border-radius:0 8px 8px 0; color:var(--dim); }
     .callout.warn { border-color:var(--warn); background:rgba(214,160,50,.08); }
     .callout.good { border-color:var(--good); background:rgba(63,185,80,.08); }
