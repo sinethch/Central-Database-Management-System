@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Semantic version to publish (for example, v1.2.3)
-        required: true
+        description: Optional release version (leave blank to use the automatic v1.0.<run-number> tag)
+        required: false
         type: string
 
 permissions:
@@ -67,7 +67,11 @@ jobs:
           if [[ "$EVENT_NAME" == "push" && "$REF_NAME" == "main" ]]; then
             RELEASE_VERSION="v1.0.${RUN_NUMBER}"
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            RELEASE_VERSION="$INPUT_VERSION"
+            if [[ -n "$INPUT_VERSION" ]]; then
+              RELEASE_VERSION="$INPUT_VERSION"
+            else
+              RELEASE_VERSION="v1.0.${RUN_NUMBER}"
+            fi
           else
             RELEASE_VERSION="$REF_NAME"
           fi
