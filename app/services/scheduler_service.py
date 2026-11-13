@@ -101,13 +101,18 @@ class SchedulerService:
                             f"Status: {item.get('status') or 'Unknown'}"
                             for item in new_entries
                         ]
-                        await notification_service.notify(
+                        result = await notification_service.notify(
                             "migration_detected",
                             "Database migrations detected",
                             f"{len(new_entries)} migration record(s) were found on {target_name} during initial monitoring.",
                             {"Target": target_name, "Migrations": "\n".join(migration_lines)},
                             "WARNING",
                         )
+                        if not result.get("success"):
+                            logger.warning("Initial migration notification was not delivered for target %s (%s); it will be retried.", target_id, result.get("status", "unknown"))
+                            # Do not establish a baseline while delivery is
+                            # unavailable. The next successful poll can retry.
+                            continue
                         logger.info("Discovered %d migration record(s) for newly monitored target %s.", len(new_entries), target_id)
                     state[target_id] = sorted(current)[-5000:]
                     state_changed = True
@@ -131,18 +136,20 @@ class SchedulerService:
                         f"Status: {item.get('status') or 'Unknown'}"
                         for item in new_entries
                     ]
-                    # Persist fingerprints before sending so delivery failures or
-                    # the next polling run cannot emit these records repeatedly.
-                    state[target_id] = sorted(known | current)[-5000:]
-                    self._save_migration_state(state)
-                    state_changed = False
-                    await notification_service.notify(
+                    result = await notification_service.notify(
                         "migration_detected",
                         "Database migrations detected",
                         f"{len(new_entries)} new migration record(s) were found on {target_name}.",
                         {"Target": target_name, "Migrations": "\n".join(migration_lines)},
                         "WARNING",
                     )
+                    if not result.get("success"):
+                        logger.warning("Migration notification was not delivered for target %s (%s); it will be retried.", target_id, result.get("status", "unknown"))
+                        continue
+                    # Record fingerprints only after successful delivery, so
+                    # failures such as disabled/muted/misconfigured Telegram
+                    # are retried by the next poll.
+                    state[target_id] = sorted(known | current)[-5000:]
                 if new_entries:
                     logger.info("Detected %d new migration record(s) for target %s.", len(new_entries), target_id)
                 combined = known | current
