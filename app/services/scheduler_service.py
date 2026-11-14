@@ -82,6 +82,11 @@ class SchedulerService:
                     continue
                 entries = history.get("migrations") or []
                 current = {self._migration_signature(item) for item in entries}
+                # An unrecognized ledger is not evidence of an empty history.
+                # Keep polling so a later-recognized ledger (or a future
+                # application release that adds support) is not baselined away.
+                if history.get("status") == "not_detected":
+                    continue
                 if target_id not in state:
                     # Newly registered targets have no history yet. Treat their
                     # first successful scan as discovery so existing migration
