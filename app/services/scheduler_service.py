@@ -100,8 +100,8 @@ class SchedulerService:
                     target_name = history.get("database_name") or target.get("name") or target_id
                     if new_entries:
                         migration_lines = [
-                            f"• `{item.get('framework') or 'Unknown'}` · "
-                            f"`{item.get('version') or 'Not recorded'}` · "
+                            f"• {item.get('framework') or 'Unknown'} · "
+                            f"{item.get('version') or 'Not recorded'} · "
                             f"{item.get('name') or 'Not recorded'} · "
                             f"Status: {item.get('status') or 'Unknown'}"
                             for item in new_entries
@@ -135,8 +135,8 @@ class SchedulerService:
                 if new_entries:
                     target_name = history.get("database_name") or target.get("name") or target_id
                     migration_lines = [
-                        f"• `{item.get('framework') or 'Unknown'}` · "
-                        f"`{item.get('version') or 'Not recorded'}` · "
+                        f"• {item.get('framework') or 'Unknown'} · "
+                        f"{item.get('version') or 'Not recorded'} · "
                         f"{item.get('name') or 'Not recorded'} · "
                         f"Status: {item.get('status') or 'Unknown'}"
                         for item in new_entries

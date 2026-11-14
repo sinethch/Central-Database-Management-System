@@ -169,7 +169,6 @@ class NotificationService:
                     body = {
                         "chat_id": chat_id,
                         "text": text,
-                        "parse_mode": "Markdown",
                         "disable_notification": bool(cfg.get("silent")),
                         "disable_web_page_preview": True,
                     }
@@ -206,7 +205,9 @@ class NotificationService:
             return {"success": False, "status": "muted", "message": f"Event '{event}' is muted."}
 
         icon = SEVERITY_ICON.get(severity.upper(), "ℹ️")
-        lines = [f"{icon} *{title}*"]
+        # Send plain text. Dynamic values can contain Markdown metacharacters
+        # (such as underscores in migration names), which Telegram may reject.
+        lines = [f"{icon} {title}"]
         if message:
             lines.append("")
             lines.append(message)
@@ -214,7 +215,7 @@ class NotificationService:
             for k, v in list(details.items())[:12]:
                 lines.append(f"• `{k}`: {v}")
         lines.append("")
-        lines.append("_DBOps Control Plane_")
+        lines.append("DBOps Control Plane")
         return await self.send_message("\n".join(lines))
 
     async def send_test(self, message: str) -> Dict[str, Any]:
