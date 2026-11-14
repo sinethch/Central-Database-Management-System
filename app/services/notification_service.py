@@ -204,23 +204,6 @@ class NotificationService:
         if not (cfg.get("events") or {}).get(event, True):
             return {"success": False, "status": "muted", "message": f"Event '{event}' is muted."}
 
-        if event == "migration_detected":
-            details = details or {}
-            rows = str(details.get("Migrations") or "").splitlines()
-            lines = [
-                "DATABASE MIGRATION DETECTED",
-                "===========================",
-                f"Database: {details.get('Target', 'Unknown')}",
-                message,
-                "",
-                "Migration records:",
-            ]
-            lines.extend(f"  {row}" for row in rows[:20])
-            if len(rows) > 20:
-                lines.append(f"  ...and {len(rows) - 20} more")
-            lines.extend(("", "DBOps Control Plane"))
-            return await self.send_message("\n".join(lines))
-
         icon = SEVERITY_ICON.get(severity.upper(), "ℹ️")
         # Send plain text. Dynamic values can contain Markdown metacharacters
         # (such as underscores in migration names), which Telegram may reject.
