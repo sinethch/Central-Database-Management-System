@@ -12,36 +12,36 @@ MIGRATION_SOURCES = [
     ("Flyway", "flyway_schema_history", """
         SELECT COALESCE(version, ''), COALESCE(description, script, ''), installed_on,
                CASE WHEN success THEN 'success' ELSE 'failed' END
-        FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 100
+        FROM {table} ORDER BY installed_rank DESC LIMIT 100
     """),
     ("Liquibase", "databasechangelog", """
         SELECT COALESCE(id, ''), COALESCE(author, '') || ' · ' || COALESCE(filename, ''),
                dateexecuted, COALESCE(exectype, 'executed')
-        FROM databasechangelog ORDER BY orderexecuted DESC LIMIT 100
+        FROM {table} ORDER BY orderexecuted DESC LIMIT 100
     """),
     ("Prisma", "_prisma_migrations", """
         SELECT migration_name, migration_name, started_at,
                CASE WHEN rolled_back_at IS NOT NULL THEN 'rolled back'
                     WHEN finished_at IS NULL THEN 'incomplete/failed' ELSE 'success' END
-        FROM _prisma_migrations ORDER BY started_at DESC LIMIT 100
+        FROM {table} ORDER BY started_at DESC LIMIT 100
     """),
     ("Django", "django_migrations", """
         SELECT app || '.' || name, app || '.' || name, applied, 'applied'
-        FROM django_migrations ORDER BY applied DESC LIMIT 100
+        FROM {table} ORDER BY applied DESC LIMIT 100
     """),
     # Alembic stores only the current head(s), not an append-only history.
     # It still must be monitored because it is a common migration framework.
     ("Alembic", "alembic_version", """
         SELECT version_num, version_num, NULL::timestamptz, 'current revision'
-        FROM alembic_version ORDER BY version_num LIMIT 100
+        FROM {table} ORDER BY version_num LIMIT 100
     """),
     ("Rails", "schema_migrations", """
         SELECT version, version, NULL::timestamptz, 'applied'
-        FROM schema_migrations ORDER BY version DESC LIMIT 100
+        FROM {table} ORDER BY version DESC LIMIT 100
     """),
-    ("Sequelize", '"SequelizeMeta"', """
+    ("Sequelize", "SequelizeMeta", """
         SELECT name, name, NULL::timestamptz, 'applied'
-        FROM "SequelizeMeta" ORDER BY name DESC LIMIT 100
+        FROM {table} ORDER BY name DESC LIMIT 100
     """),
 ]
 
@@ -78,26 +78,38 @@ class MigrationHistoryService:
         try:
             database_name = await conn.fetchval("SELECT current_database()")
             for framework, relation, query in MIGRATION_SOURCES:
-                exists = await conn.fetchval("SELECT to_regclass($1)", relation)
-                if not exists:
-                    continue
-                found.append(framework)
-                try:
-                    # Keep each ledger read isolated. A table may exist but
-                    # have a schema variant or permissions that prevent reading;
-                    # continue monitoring the other recognized frameworks.
-                    rows = await conn.fetch(query)
-                    migrations.extend({
-                        "framework": framework,
-                        "version": row[0],
-                        "name": row[1],
-                        "applied_at": _iso(row[2]),
-                        "status": row[3],
-                    } for row in rows)
-                except Exception:
-                    # Metadata table exists, but the monitoring role may not be
-                    # allowed to read its rows. Do not expose DB error details.
-                    inaccessible.append(framework)
+                # Search every application schema, not only search_path. Many
+                # projects keep Prisma (and other) ledgers in a named schema.
+                schemas = await conn.fetch(
+                    """SELECT n.nspname
+                       FROM pg_catalog.pg_class c
+                       JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                       WHERE c.relname = $1 AND c.relkind IN ('r', 'p', 'v', 'm')
+                         AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+                         AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp_%'
+                       ORDER BY n.nspname""",
+                    relation,
+                )
+                for schema_row in schemas:
+                    schema = schema_row[0]
+                    found.append(framework)
+                    # Schema comes from PostgreSQL catalog; quote it as an
+                    # identifier before inserting into these fixed queries.
+                    qualified_table = '"' + schema.replace('"', '""') + '"."' + relation.replace('"', '""') + '"'
+                    try:
+                        # Keep each ledger read isolated. A table may have a
+                        # schema variant or deny row access; continue scanning.
+                        rows = await conn.fetch(query.format(table=qualified_table))
+                        migrations.extend({
+                            "framework": framework,
+                            "schema": schema,
+                            "version": row[0],
+                            "name": row[1],
+                            "applied_at": _iso(row[2]),
+                            "status": row[3],
+                        } for row in rows)
+                    except Exception:
+                        inaccessible.append(f"{schema}.{relation}")
         finally:
             await conn.close()
 

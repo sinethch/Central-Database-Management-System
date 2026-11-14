@@ -53,6 +53,14 @@ class SchedulerService:
     def _migration_signature(item: Dict[str, Any]) -> str:
         # Status and timestamps can change while a migration is being applied
         # (or on each read for some ledgers). Identify the migration itself.
+        stable_fields = {key: item.get(key) for key in ("framework", "schema", "version", "name")}
+        return hashlib.sha256(
+            json.dumps(stable_fields, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+
+    @staticmethod
+    def _legacy_migration_signature(item: Dict[str, Any]) -> str:
+        """Read state written before schema became part of migration identity."""
         stable_fields = {key: item.get(key) for key in ("framework", "version", "name")}
         return hashlib.sha256(
             json.dumps(stable_fields, sort_keys=True, ensure_ascii=False).encode("utf-8")
@@ -103,6 +111,7 @@ class SchedulerService:
                             f"• {item.get('framework') or 'Unknown'} · "
                             f"{item.get('version') or 'Not recorded'} · "
                             f"{item.get('name') or 'Not recorded'} · "
+                            f"Schema: {item.get('schema') or 'public'} · "
                             f"Status: {item.get('status') or 'Unknown'}"
                             for item in new_entries
                         ]
@@ -129,7 +138,8 @@ class SchedulerService:
                 new_entries_by_signature = {}
                 for item in entries:
                     signature = self._migration_signature(item)
-                    if signature not in known:
+                    legacy_signature = self._legacy_migration_signature(item)
+                    if signature not in known and legacy_signature not in known:
                         new_entries_by_signature.setdefault(signature, item)
                 new_entries = list(new_entries_by_signature.values())
                 if new_entries:
@@ -138,6 +148,7 @@ class SchedulerService:
                         f"• {item.get('framework') or 'Unknown'} · "
                         f"{item.get('version') or 'Not recorded'} · "
                         f"{item.get('name') or 'Not recorded'} · "
+                        f"Schema: {item.get('schema') or 'public'} · "
                         f"Status: {item.get('status') or 'Unknown'}"
                         for item in new_entries
                     ]
