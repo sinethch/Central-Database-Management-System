@@ -279,12 +279,12 @@ class SchedulerService:
             replace_existing=True
         )
 
-        # Read migration ledgers every two minutes. The migration-history service
+        # Read migration ledgers every 50 seconds. The migration-history service
         # enforces PostgreSQL read-only transactions and only executes SELECTs.
         self.scheduler.add_job(
             self._check_migration_changes,
             "interval",
-            minutes=2,
+            seconds=50,
             id="routine_migration_monitoring",
             replace_existing=True,
             next_run_time=datetime.now(timezone.utc),
