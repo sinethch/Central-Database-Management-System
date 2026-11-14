@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl
 
 from app.config import settings
 from app.crypto_utils import decrypt_persisted_secret, encrypt_persisted_secret
@@ -21,6 +21,28 @@ def mask_url(url: str) -> str:
         return re.sub(r":([^@/]+)@", ":****@", url)
     except Exception:
         return url
+
+
+def _connection_identity(url: str) -> tuple:
+    """Canonicalize URL components for duplicate detection without exposing secrets."""
+    parsed = urlparse((url or "").strip())
+    scheme = parsed.scheme.lower()
+    if scheme == "postgres":
+        scheme = "postgresql"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    default_ports = {"postgresql": 5432, "mongodb": 27017, "redis": 6379, "mysql": 3306}
+    return (
+        scheme,
+        parsed.username or "",
+        parsed.password or "",
+        (parsed.hostname or "").lower(),
+        port or default_ports.get(scheme),
+        parsed.path.rstrip("/"),
+        tuple(sorted(parse_qsl(parsed.query, keep_blank_values=True))),
+    )
 
 
 class DatabaseRegistryService:
@@ -104,6 +126,12 @@ class DatabaseRegistryService:
             raise ValueError("A database label is required.")
         if not connection_url:
             raise ValueError("A connection URL is required.")
+
+        requested_identity = _connection_identity(connection_url)
+        for existing in self._load():
+            if _connection_identity(existing.get("connection_url", "")) == requested_identity:
+                existing_name = existing.get("name") or existing.get("id") or "another target"
+                raise ValueError(f"This database URL is already added as '{existing_name}'.")
 
         db_id = f"db-{str(uuid.uuid4())[:8]}"
         created_at = datetime.now(timezone.utc).isoformat()
