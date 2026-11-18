@@ -66,6 +66,20 @@ class SchedulerService:
             json.dumps(stable_fields, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
+    @staticmethod
+    def _format_migration_line(item: Dict[str, Any]) -> str:
+        framework = item.get("framework") or "Unknown"
+        version = item.get("version") or "Not recorded"
+        name = item.get("name") or "Not recorded"
+        # Prisma rows commonly use the migration directory name as both the
+        # version and name. Show that identifier once in the alert.
+        identity = version if name == version else f"{version} \u00b7 {name}"
+        return (
+            f"\u2022 {framework} \u00b7 {identity} \u00b7 "
+            f"Schema: {item.get('schema') or 'public'} \u00b7 "
+            f"Status: {item.get('status') or 'Unknown'}"
+        )
+
     async def _check_migration_changes(self):
         """Poll recognized migration ledgers with read-only SELECTs and alert on new rows."""
         state = self._load_migration_state()
@@ -107,14 +121,7 @@ class SchedulerService:
                     new_entries = list(new_entries_by_signature.values())
                     target_name = history.get("database_name") or target.get("name") or target_id
                     if new_entries:
-                        migration_lines = [
-                            f"• {item.get('framework') or 'Unknown'} · "
-                            f"{item.get('version') or 'Not recorded'} · "
-                            f"{item.get('name') or 'Not recorded'} · "
-                            f"Schema: {item.get('schema') or 'public'} · "
-                            f"Status: {item.get('status') or 'Unknown'}"
-                            for item in new_entries
-                        ]
+                        migration_lines = [self._format_migration_line(item) for item in new_entries]
                         result = await notification_service.notify(
                             "migration_detected",
                             "Database migrations detected",
@@ -144,14 +151,7 @@ class SchedulerService:
                 new_entries = list(new_entries_by_signature.values())
                 if new_entries:
                     target_name = history.get("database_name") or target.get("name") or target_id
-                    migration_lines = [
-                        f"• {item.get('framework') or 'Unknown'} · "
-                        f"{item.get('version') or 'Not recorded'} · "
-                        f"{item.get('name') or 'Not recorded'} · "
-                        f"Schema: {item.get('schema') or 'public'} · "
-                        f"Status: {item.get('status') or 'Unknown'}"
-                        for item in new_entries
-                    ]
+                    migration_lines = [self._format_migration_line(item) for item in new_entries]
                     result = await notification_service.notify(
                         "migration_detected",
                         "Database migrations detected",
