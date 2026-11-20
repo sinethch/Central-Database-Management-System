@@ -2737,7 +2737,7 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
   }
 
   const label = document.getElementById("restoreBackupLabel");
-  if (label) label.textContent = `${backup.backup_id} · ${backup.filename} (${backup.size_human})`;
+  if (label) label.textContent = backup ? `${backup.backup_id} · ${backup.filename} (${backup.size_human})` : "Choose a snapshot or file";
   const targetLabel = document.getElementById("restoreTargetLabel");
   if (targetLabel) targetLabel.textContent = target ? `${target.name} — ${target.connection_url}` : "Primary Database";
 
@@ -2745,6 +2745,11 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
   if (newName) newName.value = "";
   const confirm = document.getElementById("restoreConfirm");
   if (confirm) confirm.value = "";
+  const browseServer = document.getElementById("restoreBrowseServer");
+  if (browseServer) browseServer.innerHTML = `<option value="">Select server</option>${state.remoteServers.map((server) => `<option value="${escapeHtml(server.id)}">${escapeHtml(server.name)}</option>`).join("")}`;
+  document.getElementById("restoreBrowsePath").value = "";
+  document.getElementById("restoreLocalFile").value = "";
+  document.getElementById("restoreFileList").innerHTML = "";
 
   clearFieldError("restoreNewDbName");
   hideStatusEl(document.getElementById("restoreStatus"));
@@ -2860,6 +2865,12 @@ async function submitRestore() {
   const expectedConfirmation = mode === "existing" ? "RESTORE EXISTING" : "RESTORE";
   const statusEl = document.getElementById("restoreStatus");
   clearFieldError("restoreNewDbName");
+  const localFile = document.getElementById("restoreLocalFile")?.files?.[0];
+  const remotePath = document.getElementById("restoreBrowsePath")?.value || "";
+  const remoteServer = document.getElementById("restoreBrowseServer")?.value || "";
+  const useFile = !!localFile || !!remotePath;
+  if (localFile && remotePath) { setStatusEl(statusEl, "Choose either a local file or a server file, not both.", "err"); return; }
+  if (!useFile && !state.restoreBackupId) { setStatusEl(statusEl, "Choose a saved snapshot or a restore file.", "err"); return; }
 
   if (confirmVal !== expectedConfirmation) {
     setStatusEl(statusEl, `Type ${expectedConfirmation} exactly to confirm the operation.`, "err");
@@ -2887,7 +2898,14 @@ async function submitRestore() {
   computeSystemStatus();
 
   try {
-    const data = await api("/api/v1/restores", {
+    let data;
+    if (useFile) {
+      const form = new FormData();
+      form.append("db_id", targetDbId || ""); form.append("mode", mode); form.append("new_db_name", newDbName || ""); form.append("confirm", confirmVal);
+      if (localFile) form.append("upload", localFile);
+      else { form.append("source_server_id", remoteServer); form.append("remote_path", remotePath); }
+      data = await api("/api/v1/restores/file", { method: "POST", body: form });
+    } else data = await api("/api/v1/restores", {
       method: "POST",
       body: JSON.stringify({
         backup_id: state.restoreBackupId,
