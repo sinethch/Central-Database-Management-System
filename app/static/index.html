@@ -896,6 +896,7 @@
         </div>
       </div>
 
+      <div class="restore-source-grid">
       <div class="form-group">
         <label for="restoreSourceDbSelect">1. Database snapshot source</label>
         <select id="restoreSourceDbSelect" class="form-control"></select>
@@ -907,9 +908,17 @@
         <select id="restoreBackupSelect" class="form-control"></select>
         <small class="field-hint">This is a saved copy of the source database. The source is unchanged unless you explicitly choose it as the existing restore target.</small>
       </div>
+      </div>
 
-      <details class="form-group" id="restoreFileSource">
-        <summary>Restore from a file instead</summary>
+      <div class="form-group restore-location-group">
+        <label for="restoreSourceServer">Saved snapshot copy location</label>
+        <select id="restoreSourceServer" class="form-control"><option value="">Local or mounted repository</option></select>
+        <small class="field-hint">Choose a verified remote copy of the selected saved snapshot. Remote copies can only restore into a new database.</small>
+      </div>
+
+      <details class="restore-file-source" id="restoreFileSource">
+        <summary><span>Restore from a file instead</span><small>Use a dump from this machine or browse a registered server.</small></summary>
+        <div class="restore-file-grid">
         <div class="form-group" style="margin-top:12px">
           <label for="restoreLocalFile">Local dump file on this machine</label>
           <input id="restoreLocalFile" class="form-control" type="file" accept=".dump,.backup,.tar,.sql,.sql.gz">
@@ -921,17 +930,12 @@
           <div style="display:flex;gap:8px;margin-top:8px"><input id="restoreBrowsePath" class="form-control mono" placeholder="Snapshot directory" readonly><button type="button" class="btn btn-secondary" data-action="browse-restore-files">Browse</button></div>
           <div id="restoreFileList" class="card-footnote" style="margin-top:8px" aria-live="polite"></div>
         </div>
+        </div>
       </details>
 
       <div class="restore-version-note" role="note" aria-label="PostgreSQL version compatibility">
         <span aria-hidden="true">ⓘ</span>
         <span>Before restoring, check the PostgreSQL major version on the snapshot source and target. Use the same major version for the most reliable restore; restoring a newer-version snapshot to an older server may fail because it does not support settings or features in the archive.</span>
-      </div>
-
-      <div class="form-group">
-        <label for="restoreSourceServer">Snapshot file location</label>
-        <select id="restoreSourceServer" class="form-control"><option value="">Local or mounted repository</option></select>
-        <small class="field-hint">Only “Local or mounted repository” appears until this snapshot has a verified copy on a registered remote server. To add a remote option, register a server in Servers and copy this snapshot there. Remote copies can only restore into a new database.</small>
       </div>
 
       <div class="form-group" id="restoreCloneTargetGroup">

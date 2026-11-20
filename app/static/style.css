@@ -1180,6 +1180,30 @@ dialog {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
+#restoreDialog { width: min(780px, 94vw); }
+#restoreDialog .dialog-content { padding: 1.5rem 1.65rem; }
+#restoreDialog .restore-source-grid,
+#restoreDialog .restore-file-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+#restoreDialog .restore-source-grid .form-group { min-width: 0; }
+#restoreDialog select.form-control { min-width: 0; text-overflow: ellipsis; }
+#restoreDialog .restore-file-source { margin: 0 0 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); background: var(--inset); }
+#restoreDialog .restore-file-source > summary { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.75rem 0.9rem; cursor: pointer; font-size: 0.82rem; font-weight: 650; color: var(--text); }
+#restoreDialog .restore-file-source > summary small { font-size: 0.7rem; font-weight: 400; color: var(--text-faint); }
+#restoreDialog .restore-file-source[open] > summary { border-bottom: 1px solid var(--border); }
+#restoreDialog .restore-file-grid { padding: 0.25rem 0.9rem 0.1rem; }
+#restoreDialog .restore-file-grid .form-group { min-width: 0; }
+#restoreDialog #restoreFileList { display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 150px; overflow-y: auto; }
+#restoreDialog #restoreBrowsePath { min-width: 0; }
+#restoreDialog #restoreBrowsePath { flex: 1; }
+#restoreDialog .restore-file-grid > .form-group { margin-bottom: 0.85rem; }
+#restoreDialog .restore-file-grid > .form-group:first-child { margin-top: 0.85rem !important; }
+#restoreDialog .restore-version-note { margin-top: 0.25rem; }
+@media (max-width: 640px) {
+  #restoreDialog { width: min(94vw, 560px); }
+  #restoreDialog .dialog-content { padding: 1.1rem; }
+  #restoreDialog .restore-source-grid,
+  #restoreDialog .restore-file-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
 dialog::backdrop { background: rgba(4, 6, 10, 0.66); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 @starting-style {
   dialog[open] { opacity: 0; transform: translateY(8px) scale(0.985); }
