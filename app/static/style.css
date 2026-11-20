@@ -1184,6 +1184,21 @@ dialog {
 #restoreDialog .dialog-content { padding: 1.5rem 1.65rem; }
 #restoreDialog .restore-source-grid,
 #restoreDialog .restore-file-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+#restoreDialog .restore-strategy { margin: 0 0 1rem; padding: 0.8rem; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); min-width: 0; }
+#restoreDialog .restore-strategy legend { padding: 0 0.35rem; font-size: 0.8rem; font-weight: 650; color: var(--text); }
+#restoreDialog .restore-strategy-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+#restoreDialog .restore-strategy-option { display: flex; align-items: flex-start; gap: 0.55rem; min-width: 0; padding: 0.7rem; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--inset); cursor: pointer; }
+#restoreDialog .restore-strategy-option:has(input:checked) { border-color: var(--accent-line); background: var(--accent-soft); }
+#restoreDialog .restore-strategy-option input { margin: 0.2rem 0 0; accent-color: var(--accent); flex: none; }
+#restoreDialog .restore-strategy-option span { display: grid; gap: 0.2rem; min-width: 0; }
+#restoreDialog .restore-strategy-option strong { font-size: 0.76rem; color: var(--text); }
+#restoreDialog .restore-strategy-option small { font-size: 0.67rem; line-height: 1.4; color: var(--text-faint); }
+#restoreDialog .restore-source-steps { padding: 0.9rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--radius-xs); }
+#restoreDialog .restore-source-steps > .form-group:last-child { margin-bottom: 0; }
+#restoreDialog .restore-server-browser { min-width: 0; }
+#restoreDialog .restore-browser-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; margin-bottom: 0.55rem; font-size: 0.75rem; }
+#restoreDialog .restore-current-path { padding: 0.55rem 0.7rem; margin-bottom: 0.55rem; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--inset); font: 0.72rem var(--mono); color: var(--text-dim); }
+#restoreDialog .restore-file-list { display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 170px; overflow-y: auto; }
 #restoreDialog .restore-source-grid .form-group { min-width: 0; }
 #restoreDialog select.form-control { min-width: 0; text-overflow: ellipsis; }
 #restoreDialog .restore-file-source { margin: 0 0 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); background: var(--inset); }
@@ -1192,9 +1207,7 @@ dialog {
 #restoreDialog .restore-file-source[open] > summary { border-bottom: 1px solid var(--border); }
 #restoreDialog .restore-file-grid { padding: 0.25rem 0.9rem 0.1rem; }
 #restoreDialog .restore-file-grid .form-group { min-width: 0; }
-#restoreDialog #restoreFileList { display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 150px; overflow-y: auto; }
 #restoreDialog #restoreBrowsePath { min-width: 0; }
-#restoreDialog #restoreBrowsePath { flex: 1; }
 #restoreDialog .restore-file-grid > .form-group { margin-bottom: 0.85rem; }
 #restoreDialog .restore-file-grid > .form-group:first-child { margin-top: 0.85rem !important; }
 #restoreDialog .restore-version-note { margin-top: 0.25rem; }
@@ -1203,6 +1216,7 @@ dialog {
   #restoreDialog .dialog-content { padding: 1.1rem; }
   #restoreDialog .restore-source-grid,
   #restoreDialog .restore-file-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  #restoreDialog .restore-strategy-options { grid-template-columns: minmax(0, 1fr); }
 }
 dialog::backdrop { background: rgba(4, 6, 10, 0.66); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 @starting-style {

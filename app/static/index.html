@@ -892,19 +892,29 @@
         <div class="dialog-icon tile-red" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-restore"/></svg></div>
         <div>
           <h3 id="restoreTitle" class="dialog-title">Restore Snapshot</h3>
-          <p class="dialog-subtitle">Choose which saved snapshot to copy, where to restore it, and whether to create a database or write into an existing one.</p>
+          <p class="dialog-subtitle">Choose a restore source first, then follow the steps shown for that option.</p>
         </div>
       </div>
 
+      <fieldset class="restore-strategy">
+        <legend>1. Restore source</legend>
+        <div class="restore-strategy-options">
+          <label class="restore-strategy-option"><input type="radio" name="restoreStrategy" value="system" checked><span><strong>System backup</strong><small>Restore from a backup created and stored by this system.</small></span></label>
+          <label class="restore-strategy-option"><input type="radio" name="restoreStrategy" value="server"><span><strong>File on a server</strong><small>Browse a registered server’s snapshot directory.</small></span></label>
+          <label class="restore-strategy-option"><input type="radio" name="restoreStrategy" value="local"><span><strong>Local file</strong><small>Upload a dump from this machine.</small></span></label>
+        </div>
+      </fieldset>
+
+      <section id="restoreSystemSteps" class="restore-source-steps">
       <div class="restore-source-grid">
       <div class="form-group">
-        <label for="restoreSourceDbSelect">1. Database snapshot source</label>
+        <label for="restoreSourceDbSelect">2. Database snapshot source</label>
         <select id="restoreSourceDbSelect" class="form-control"></select>
         <small class="field-hint">Only databases with a completed snapshot can be used as a restore source. Registered PostgreSQL databases without a completed snapshot are shown as unavailable.</small>
         <small class="field-hint">Choose a registered database to narrow the snapshot list. This is the source; the destination is selected separately below.</small>
       </div>
       <div class="form-group">
-        <label for="restoreBackupSelect">2. Snapshot to restore</label>
+        <label for="restoreBackupSelect">3. Snapshot to restore</label>
         <select id="restoreBackupSelect" class="form-control"></select>
         <small class="field-hint">This is a saved copy of the source database. The source is unchanged unless you explicitly choose it as the existing restore target.</small>
       </div>
@@ -915,23 +925,28 @@
         <select id="restoreSourceServer" class="form-control"><option value="">Local or mounted repository</option></select>
         <small class="field-hint">Choose a verified remote copy of the selected saved snapshot. Remote copies can only restore into a new database.</small>
       </div>
+      </section>
 
-      <details class="restore-file-source" id="restoreFileSource">
-        <summary><span>Restore from a file instead</span><small>Use a dump from this machine or browse a registered server.</small></summary>
-        <div class="restore-file-grid">
-        <div class="form-group" style="margin-top:12px">
-          <label for="restoreLocalFile">Local dump file on this machine</label>
-          <input id="restoreLocalFile" class="form-control" type="file" accept=".dump,.backup,.tar,.sql,.sql.gz">
-          <small class="field-hint">Supported PostgreSQL files: .dump, .backup, .tar, .sql and .sql.gz.</small>
-        </div>
+      <section id="restoreServerSteps" class="restore-source-steps" hidden>
         <div class="form-group">
-          <label for="restoreBrowseServer">Or browse a registered server</label>
+          <label for="restoreBrowseServer">2. Select a registered server</label>
           <select id="restoreBrowseServer" class="form-control"><option value="">Select server</option></select>
-          <div style="display:flex;gap:8px;margin-top:8px"><input id="restoreBrowsePath" class="form-control mono" placeholder="Snapshot directory" readonly><button type="button" class="btn btn-secondary" data-action="browse-restore-files">Browse</button></div>
-          <div id="restoreFileList" class="card-footnote" style="margin-top:8px" aria-live="polite"></div>
+          <small class="field-hint">The directory contents load automatically after you choose a server.</small>
         </div>
+        <div class="restore-server-browser">
+          <div class="restore-browser-heading"><strong>3. Select a dump file</strong><button type="button" class="btn btn-secondary btn-sm" data-action="browse-restore-files">Refresh directory</button></div>
+          <div id="restoreBrowsePath" class="restore-current-path" aria-live="polite">Choose a server to load its snapshot directory.</div>
+          <div id="restoreFileList" class="restore-file-list" aria-live="polite"></div>
         </div>
-      </details>
+      </section>
+
+      <section id="restoreLocalSteps" class="restore-source-steps" hidden>
+        <div class="form-group">
+          <label for="restoreLocalFile">2. Choose a dump file from this machine</label>
+          <input id="restoreLocalFile" class="form-control" type="file" accept=".dump,.backup,.tar,.sql,.sql.gz">
+          <small class="field-hint">Supported PostgreSQL files: .dump, .backup, .tar, .sql and .sql.gz. The file is uploaded to the application to run the restore.</small>
+        </div>
+      </section>
 
       <div class="restore-version-note" role="note" aria-label="PostgreSQL version compatibility">
         <span aria-hidden="true">ⓘ</span>
@@ -939,19 +954,19 @@
       </div>
 
       <div class="form-group" id="restoreCloneTargetGroup">
-        <label for="restoreTargetDbId" id="restoreTargetFieldLabel">3. Destination PostgreSQL server</label>
+        <label for="restoreTargetDbId" id="restoreTargetFieldLabel">4. Destination PostgreSQL server</label>
         <select id="restoreTargetDbId" class="form-control"></select>
         <small class="field-hint" id="restoreTargetFieldHint">Choose a registered PostgreSQL target. To restore into another existing database, choose “Write into an existing database” below; this list will show registered PostgreSQL databases you can select.</small>
       </div>
       <div class="form-group">
-        <label for="restoreMode">4. What should happen on the destination?</label>
+        <label for="restoreMode">5. What should happen on the destination?</label>
         <select id="restoreMode" class="form-control">
           <option value="clone">Create a separate new database (recommended)</option>
           <option value="existing">Write into an existing database</option>
         </select>
       </div>
       <div class="form-group" id="restoreNewDbGroup">
-        <label for="restoreNewDbName">5. Name for the new database</label>
+        <label for="restoreNewDbName">6. Name for the new database</label>
         <input type="text" id="restoreNewDbName" class="form-control mono" placeholder="demo_db_restore_2026" autocomplete="off">
         <small class="field-hint">Created on the destination server. Must be a new name that does not already exist there.</small>
         <small class="field-error" id="restoreNewDbNameError" hidden></small>
@@ -970,7 +985,7 @@
       </div>
 
       <div class="form-group">
-        <label for="restoreConfirm">6. Type <code id="restoreConfirmPhrase">RESTORE</code> to confirm</label>
+        <label for="restoreConfirm">7. Type <code id="restoreConfirmPhrase">RESTORE</code> to confirm</label>
         <input type="text" id="restoreConfirm" class="form-control mono" placeholder="RESTORE" autocomplete="off" spellcheck="false">
       </div>
 

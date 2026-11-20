@@ -2742,9 +2742,14 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
   if (confirm) confirm.value = "";
   const browseServer = document.getElementById("restoreBrowseServer");
   if (browseServer) browseServer.innerHTML = `<option value="">Select server</option>${state.remoteServers.map((server) => `<option value="${escapeHtml(server.id)}">${escapeHtml(server.name)}</option>`).join("")}`;
-  document.getElementById("restoreBrowsePath").value = "";
+  const restorePath = document.getElementById("restoreBrowsePath");
+  restorePath.textContent = "Choose a server to load its snapshot directory.";
+  restorePath.dataset.selectedPath = "";
   document.getElementById("restoreLocalFile").value = "";
   document.getElementById("restoreFileList").innerHTML = "";
+  const defaultStrategy = document.querySelector('input[name="restoreStrategy"][value="system"]');
+  if (defaultStrategy) defaultStrategy.checked = true;
+  setRestoreSourceStrategy("system");
 
   clearFieldError("restoreNewDbName");
   hideStatusEl(document.getElementById("restoreStatus"));
@@ -2791,6 +2796,9 @@ async function browseRestoreFiles(path = "") {
   if (!serverId) { showToast("Select a registered server first.", "warning"); return; }
   const qs = path ? `?path=${encodeURIComponent(path)}` : "";
   const data = await api(`/api/v1/servers/${encodeURIComponent(serverId)}/snapshot-files${qs}`);
+  const pathLabel = document.getElementById("restoreBrowsePath");
+  pathLabel.textContent = data.path;
+  pathLabel.dataset.selectedPath = "";
   const items = [];
   items.push(`<span class="card-footnote">${escapeHtml(data.path)}</span>`);
   if (data.parent) items.push(`<button type="button" class="btn btn-secondary btn-sm" data-action="browse-restore-path" data-path="${escapeHtml(data.parent)}">.. (parent folder)</button>`);
@@ -2799,6 +2807,13 @@ async function browseRestoreFiles(path = "") {
     else if (/\.(dump|backup|tar|sql|sql\.gz)$/i.test(entry.name)) items.push(`<button type="button" class="btn btn-secondary btn-sm" data-action="select-restore-path" data-path="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</button>`);
   }
   document.getElementById("restoreFileList").innerHTML = items.length ? items.join(" ") : "No supported dump files or folders here.";
+}
+
+function setRestoreSourceStrategy(strategy) {
+  const selected = ["system", "server", "local"].includes(strategy) ? strategy : "system";
+  document.getElementById("restoreSystemSteps").hidden = selected !== "system";
+  document.getElementById("restoreServerSteps").hidden = selected !== "server";
+  document.getElementById("restoreLocalSteps").hidden = selected !== "local";
 }
 
 function restoreDatabaseName(db) {
@@ -2854,7 +2869,7 @@ function toggleRestoreMode() {
   if (newGroup) newGroup.hidden = !isClone;
   const targetLabel = document.getElementById("restoreTargetFieldLabel");
   const targetHint = document.getElementById("restoreTargetFieldHint");
-  if (targetLabel) targetLabel.textContent = isClone ? "2. Destination PostgreSQL server" : "3. Existing database to receive the snapshot";
+  if (targetLabel) targetLabel.textContent = isClone ? "4. Destination PostgreSQL server" : "4. Existing database to receive the snapshot";
   if (targetHint) targetHint.textContent = isClone
     ? "Choose a registered PostgreSQL target. To restore into another existing database, choose “Write into an existing database” below; this list will show registered PostgreSQL databases you can select."
     : "Choose the exact registered PostgreSQL database to receive the snapshot. The snapshot source may be selected here too.";
@@ -2875,12 +2890,14 @@ async function submitRestore() {
   const expectedConfirmation = mode === "existing" ? "RESTORE EXISTING" : "RESTORE";
   const statusEl = document.getElementById("restoreStatus");
   clearFieldError("restoreNewDbName");
-  const localFile = document.getElementById("restoreLocalFile")?.files?.[0];
-  const remotePath = document.getElementById("restoreBrowsePath")?.value || "";
+  const strategy = document.querySelector('input[name="restoreStrategy"]:checked')?.value || "system";
+  const localFile = strategy === "local" ? document.getElementById("restoreLocalFile")?.files?.[0] : null;
+  const remotePath = strategy === "server" ? document.getElementById("restoreBrowsePath")?.dataset.selectedPath || "" : "";
   const remoteServer = document.getElementById("restoreBrowseServer")?.value || "";
-  const useFile = !!localFile || !!remotePath;
-  if (localFile && remotePath) { setStatusEl(statusEl, "Choose either a local file or a server file, not both.", "err"); return; }
-  if (!useFile && !state.restoreBackupId) { setStatusEl(statusEl, "Choose a saved snapshot or a restore file.", "err"); return; }
+  const useFile = strategy !== "system";
+  if (strategy === "server" && (!remoteServer || !remotePath)) { setStatusEl(statusEl, "Select a server and then choose a dump file from its directory.", "err"); return; }
+  if (strategy === "local" && !localFile) { setStatusEl(statusEl, "Choose a local dump file to continue.", "err"); return; }
+  if (strategy === "system" && !state.restoreBackupId) { setStatusEl(statusEl, "Choose a saved system backup to continue.", "err"); return; }
 
   if (confirmVal !== expectedConfirmation) {
     setStatusEl(statusEl, `Type ${expectedConfirmation} exactly to confirm the operation.`, "err");
@@ -2912,7 +2929,7 @@ async function submitRestore() {
     if (useFile) {
       const form = new FormData();
       form.append("db_id", targetDbId || ""); form.append("mode", mode); form.append("new_db_name", newDbName || ""); form.append("confirm", confirmVal);
-      if (localFile) form.append("upload", localFile);
+      if (strategy === "local") form.append("upload", localFile);
       else { form.append("source_server_id", remoteServer); form.append("remote_path", remotePath); }
       data = await api("/api/v1/restores/file", { method: "POST", body: form });
     } else data = await api("/api/v1/restores", {
@@ -4131,7 +4148,7 @@ function handleAction(action, el) {
     case "submit-restore": submitRestore(); break;
     case "browse-restore-files": browseRestoreFiles().catch((err) => showToast(`Could not browse server: ${err.message}`, "error")); break;
     case "browse-restore-path": browseRestoreFiles(el.dataset.path).catch((err) => showToast(`Could not browse server: ${err.message}`, "error")); break;
-    case "select-restore-path": document.getElementById("restoreBrowsePath").value = el.dataset.path; document.getElementById("restoreFileList").innerHTML = `Selected: ${escapeHtml(el.dataset.path)}`; document.getElementById("restoreLocalFile").value = ""; break;
+    case "select-restore-path": { const selectedPath = document.getElementById("restoreBrowsePath"); selectedPath.textContent = `Selected: ${el.dataset.path}`; selectedPath.dataset.selectedPath = el.dataset.path; document.getElementById("restoreFileList").innerHTML = `Selected: ${escapeHtml(el.dataset.path)}`; break; }
     case "refresh-restores": fetchRestores(); break;
     case "refresh-migrations": fetchMigrationHistory(); break;
     case "restore-detail": showRestoreDetail(el.dataset.id); break;
@@ -4212,7 +4229,14 @@ function registerEvents() {
   });
 
   document.addEventListener("change", (ev) => {
-    if (ev.target.id === "restoreLocalFile" && ev.target.files?.length) { document.getElementById("restoreBrowsePath").value = ""; document.getElementById("restoreFileList").innerHTML = ""; }
+    if (ev.target.name === "restoreStrategy") setRestoreSourceStrategy(ev.target.value);
+    if (ev.target.id === "restoreBrowseServer") {
+      const selectedPath = document.getElementById("restoreBrowsePath");
+      selectedPath.dataset.selectedPath = "";
+      document.getElementById("restoreFileList").innerHTML = "";
+      if (ev.target.value) browseRestoreFiles().catch((err) => showToast(`Could not load server directory: ${err.message}`, "error"));
+    }
+    if (ev.target.id === "restoreLocalFile" && ev.target.files?.length) { const selectedPath = document.getElementById("restoreBrowsePath"); selectedPath.textContent = "Choose a server to load its snapshot directory."; selectedPath.dataset.selectedPath = ""; document.getElementById("restoreFileList").innerHTML = ""; }
     if (ev.target.matches(".target-section-select")) {
       if (ev.target.value && ev.target.value !== state.activeDatabaseId) selectDatabase(ev.target.value);
       return;
