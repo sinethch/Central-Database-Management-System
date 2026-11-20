@@ -26,6 +26,7 @@ class SchedulerService:
         self.job_id = "automated_backup_job"
         self.retention_job_id = "retention_pruning_job"
         self.current_cron = settings.BACKUP_SCHEDULE
+        self.current_crons = [settings.BACKUP_SCHEDULE] if settings.BACKUP_SCHEDULE else []
         self.is_enabled = bool(settings.BACKUP_SCHEDULE)
         self.current_format = "custom"
         self.current_encrypt = False
@@ -187,6 +188,7 @@ class SchedulerService:
             saved = json.loads(self.settings_file.read_text(encoding="utf-8"))
             if isinstance(saved, dict):
                 self.current_cron = saved.get("cron", self.current_cron)
+                self.current_crons = list(saved.get("crons") or ([self.current_cron] if self.current_cron else []))
                 self.is_enabled = bool(saved.get("enabled", self.is_enabled))
                 self.current_format = saved.get("format", self.current_format)
                 self.current_encrypt = bool(saved.get("encrypt", self.current_encrypt))
@@ -200,6 +202,7 @@ class SchedulerService:
         settings.get_backup_path()
         data = {
             "cron": self.current_cron,
+            "crons": self.current_crons,
             "enabled": self.is_enabled,
             "format": self.current_format,
             "encrypt": self.current_encrypt,
@@ -259,7 +262,7 @@ class SchedulerService:
     def start(self):
         # 1. Automated Backup Job
         if self.is_enabled and self.current_cron:
-            self._schedule_cron_job(self.current_cron)
+            self._schedule_cron_jobs(self.current_crons or [self.current_cron])
 
         # 2. Hourly Retention Job
         self.scheduler.add_job(
@@ -294,42 +297,45 @@ class SchedulerService:
         logger.info("DBOps Background Scheduler started.")
 
     def _schedule_cron_job(self, cron_expr: str):
-        parts = cron_expr.strip().split()
-        if len(parts) != 5:
-            raise ValueError(f"Invalid cron expression: '{cron_expr}'. Expected 5 space-separated fields (min hour day month dow).")
+        self._schedule_cron_jobs([cron_expr])
 
-        minute, hour, day, month, day_of_week = parts
-        trigger = CronTrigger(
-            minute=minute,
-            hour=hour,
-            day=day,
-            month=month,
-            day_of_week=day_of_week,
-            timezone="UTC",
-        )
-        self.scheduler.add_job(
-            self._scheduled_backup_task,
-            trigger=trigger,
-            id=self.job_id,
-            replace_existing=True
-        )
-        logger.info(f"Scheduled backup job registered with cron: '{cron_expr}'")
+    def _schedule_cron_jobs(self, cron_exprs):
+        expressions = list(dict.fromkeys(str(expr).strip() for expr in (cron_exprs or []) if str(expr).strip()))
+        if not expressions or len(expressions) > 24:
+            raise ValueError("Provide between 1 and 24 schedule times.")
+        for expression in expressions:
+            if len(expression.split()) != 5:
+                raise ValueError(f"Invalid cron expression: '{expression}'. Expected 5 space-separated fields (min hour day month dow).")
+            CronTrigger.from_crontab(expression, timezone="UTC")
+        self._remove_schedule_jobs()
+        for index, expression in enumerate(expressions):
+            trigger = CronTrigger.from_crontab(expression, timezone="UTC")
+            job_id = self.job_id if index == 0 else f"{self.job_id}_{index}"
+            self.scheduler.add_job(self._scheduled_backup_task, trigger=trigger, id=job_id, replace_existing=True)
+            logger.info("Scheduled backup job registered with cron: '%s'", expression)
+
+    def _remove_schedule_jobs(self):
+        for job in self.scheduler.get_jobs():
+            if job.id == self.job_id or job.id.startswith(self.job_id + "_"):
+                self.scheduler.remove_job(job.id)
 
     def update_schedule(self, cron: str, enabled: bool, format_type: str = "custom", encrypt: bool = False,
-                        db_id: Optional[str] = None, repository_ids=None, destination_server_ids=None) -> Dict[str, Any]:
+                        db_id: Optional[str] = None, repository_ids=None, destination_server_ids=None, crons=None) -> Dict[str, Any]:
+        expressions = list(dict.fromkeys(crons or [cron]))
         if not enabled:
-            if self.scheduler.get_job(self.job_id):
-                self.scheduler.remove_job(self.job_id)
+            self._remove_schedule_jobs()
             self.current_format = format_type
             self.current_encrypt = encrypt
             self.current_db_id = db_id
             self.current_repository_ids = list(dict.fromkeys(repository_ids or []))
             self.current_destination_server_ids = list(dict.fromkeys(destination_server_ids or []))
             self.current_cron = cron
+            self.current_crons = expressions
             self.is_enabled = False
             self._save_settings()
             return {
                 "cron": cron,
+                "crons": expressions,
                 "enabled": False,
                 "format": format_type,
                 "encrypt": encrypt,
@@ -340,28 +346,24 @@ class SchedulerService:
                 "message": "Automated backup schedule disabled."
             }
 
-        self._schedule_cron_job(cron)
+        self._schedule_cron_jobs(expressions)
         self.current_format = format_type
         self.current_encrypt = encrypt
         self.current_db_id = db_id
         self.current_repository_ids = list(dict.fromkeys(repository_ids or []))
         self.current_destination_server_ids = list(dict.fromkeys(destination_server_ids or []))
         self.current_cron = cron
+        self.current_crons = expressions
         self.is_enabled = True
         self._save_settings()
 
         job = self.scheduler.get_job(self.job_id)
-        next_run_val = getattr(job, "next_run_time", None) if job else None
-        if not next_run_val and job and getattr(job, "trigger", None):
-            from datetime import datetime, timezone
-            try:
-                next_run_val = job.trigger.get_next_fire_time(None, datetime.now(timezone.utc))
-            except Exception:
-                next_run_val = None
+        next_run_val = self._next_scheduled_run()
         next_run = next_run_val.isoformat() if next_run_val else None
 
         return {
             "cron": cron,
+            "crons": expressions,
             "enabled": True,
             "format": format_type,
             "encrypt": encrypt,
@@ -372,19 +374,33 @@ class SchedulerService:
             "message": f"Backup schedule updated successfully. Next execution: {next_run}"
         }
 
+    def _next_scheduled_run(self):
+        now = datetime.now(timezone.utc)
+        candidates = []
+        for item in self.scheduler.get_jobs():
+            if item.id != self.job_id and not item.id.startswith(self.job_id + "_"):
+                continue
+            try:
+                next_run = item.next_run_time
+            except AttributeError:
+                next_run = None
+            if next_run is None:
+                try:
+                    next_run = item.trigger.get_next_fire_time(None, now)
+                except Exception:
+                    continue
+            if next_run is not None:
+                candidates.append(next_run)
+        return min(candidates) if candidates else None
+
     def get_schedule_status(self) -> Dict[str, Any]:
         job = self.scheduler.get_job(self.job_id)
-        next_run_val = getattr(job, "next_run_time", None) if job else None
-        if not next_run_val and job and getattr(job, "trigger", None):
-            from datetime import datetime, timezone
-            try:
-                next_run_val = job.trigger.get_next_fire_time(None, datetime.now(timezone.utc))
-            except Exception:
-                next_run_val = None
+        next_run_val = self._next_scheduled_run()
         next_run = next_run_val.isoformat() if next_run_val else None
 
         return {
             "cron": self.current_cron,
+            "crons": self.current_crons,
             "enabled": self.is_enabled and job is not None,
             "format": self.current_format,
             "encrypt": self.current_encrypt,

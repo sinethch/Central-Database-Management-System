@@ -45,6 +45,7 @@ class BackupListResponse(BaseModel):
 
 class BackupScheduleRequest(BaseModel):
     cron: str = Field(default="0 2 * * *", description="Cron expression (e.g. '0 2 * * *' for daily at 2 AM)")
+    crons: List[str] = Field(default_factory=list, max_length=24, description="Cron expressions for separate schedule times")
     enabled: bool = Field(default=True, description="Whether the schedule is active")
     format: str = Field(default="custom", description="Backup format: 'custom' or 'plain'")
     encrypt: bool = Field(default=False, description="Encrypt automated backup")
@@ -55,6 +56,7 @@ class BackupScheduleRequest(BaseModel):
 
 class BackupScheduleResponse(BaseModel):
     cron: str
+    crons: List[str] = Field(default_factory=list)
     enabled: bool
     format: str
     encrypt: bool

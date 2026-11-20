@@ -1057,6 +1057,10 @@ main {
 .server-check-row { display: flex; align-items: center; gap: .6rem; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-dim); }
 .server-check-row input { accent-color: var(--accent); }
 .schedule-options { align-items: start; }
+.schedule-daily-times { display: grid; gap: .45rem; margin-bottom: .55rem; }
+.schedule-time-row { display: flex; align-items: center; gap: .5rem; }
+.schedule-time-row .form-control { min-width: 0; }
+.schedule-time-row [data-action="remove-schedule-time"] { flex: none; }
 .schedule-preview { margin: .25rem 0 .9rem; padding: .75rem .85rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-muted, rgba(255,255,255,.02)); color: var(--text-dim); font-size: .86rem; }
 
 @container server-health (max-width: 1100px) {

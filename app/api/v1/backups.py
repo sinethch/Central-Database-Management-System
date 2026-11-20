@@ -106,6 +106,7 @@ async def configure_schedule(payload: BackupScheduleRequest):
                 raise ValueError(f"Selected remote server '{server_id}' is no longer registered.")
         res = scheduler_service.update_schedule(
             cron=payload.cron,
+            crons=payload.crons or [payload.cron],
             enabled=payload.enabled,
             format_type=payload.format,
             encrypt=payload.encrypt,

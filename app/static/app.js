@@ -3775,6 +3775,9 @@ function scheduleDescription() {
     timing = `Snapshots will run every ${day.options[day.selectedIndex].text} at ${timeLabel} (UTC schedule: ${utcDay} ${String(converted.hour).padStart(2, "0")}:${String(converted.minute).padStart(2, "0")}).`;
   } else if (frequency === "monthly") {
     timing = `Snapshots will run on day ${document.getElementById("scheduleMonthDay").value} of each month at ${timeLabel}.`;
+  } else if (frequency === "daily") {
+    const times = [...new Set(Array.from(document.querySelectorAll(".schedule-daily-time"), (input) => input.value).filter(Boolean))].sort();
+    timing = `Snapshots will run every day at ${times.map((value) => `${value} Sri Lanka time`).join(", ") || "the selected times"}.`;
   } else timing = `Snapshots will run every day at ${timeLabel}.`;
 
   const dbSelect = document.getElementById("scheduleDbId");
@@ -3788,19 +3791,54 @@ function scheduleDescription() {
 
 function syncScheduleControls() {
   const frequency = document.getElementById("scheduleFrequency").value;
-  document.getElementById("scheduleTimeGroup").hidden = frequency === "current";
+  document.getElementById("scheduleDailyTimesGroup").hidden = frequency !== "daily";
+  document.getElementById("scheduleTimeGroup").hidden = frequency === "current" || frequency === "daily";
   document.getElementById("scheduleWeekdayGroup").hidden = frequency !== "weekly";
   document.getElementById("scheduleMonthDayGroup").hidden = frequency !== "monthly";
+  let expressions = [];
   if (frequency !== "current") {
-    const local = document.getElementById("scheduleTime").value || "07:30";
-    const converted = scheduleCronFromLocal(local, frequency === "weekly" ? document.getElementById("scheduleWeekday").value : null);
-    const day = frequency === "monthly" ? document.getElementById("scheduleMonthDay").value : "*";
-    document.getElementById("scheduleCron").value = `${converted.minute} ${converted.hour} ${day} * ${frequency === "weekly" ? converted.weekday : "*"}`;
+    if (frequency === "daily") {
+      const dailyTimes = [...new Set(Array.from(document.querySelectorAll(".schedule-daily-time"), (input) => input.value).filter(Boolean))].sort();
+      expressions = dailyTimes.map((local) => { const converted = scheduleCronFromLocal(local); return `${converted.minute} ${converted.hour} * * *`; });
+    } else {
+      const local = document.getElementById("scheduleTime").value || "07:30";
+      const converted = scheduleCronFromLocal(local, frequency === "weekly" ? document.getElementById("scheduleWeekday").value : null);
+      const day = frequency === "monthly" ? document.getElementById("scheduleMonthDay").value : "*";
+      expressions = [`${converted.minute} ${converted.hour} ${day} * ${frequency === "weekly" ? converted.weekday : "*"}`];
+    }
+    document.getElementById("scheduleCrons").value = JSON.stringify(expressions);
+    document.getElementById("scheduleCron").value = expressions[0] || "0 2 * * *";
   }
   document.getElementById("schedulePreview").textContent = scheduleDescription();
 }
 
-function loadScheduleControls(cron) {
+function renderScheduleDailyTimes(times) {
+  const container = document.getElementById("scheduleDailyTimes");
+  const values = (times?.length ? times : ["07:30"]).slice(0, 24);
+  container.innerHTML = values.map((time) => `<div class="schedule-time-row"><input type="time" class="form-control schedule-daily-time" value="${escapeHtml(time)}" aria-label="Daily snapshot time">${values.length > 1 ? '<button type="button" class="btn btn-secondary btn-sm" data-action="remove-schedule-time" aria-label="Remove time">Remove</button>' : ""}</div>`).join("");
+}
+
+function addScheduleTime() {
+  const inputs = [...document.querySelectorAll(".schedule-daily-time")];
+  if (inputs.length >= 24) { showToast("A schedule can have at most 24 daily run times.", "warning"); return; }
+  const current = inputs.map((input) => input.value).filter(Boolean);
+  const next = ["00:00", "06:00", "12:00", "18:00"].find((time) => !current.includes(time)) || "23:59";
+  renderScheduleDailyTimes([...current, next]);
+  syncScheduleControls();
+}
+
+function loadScheduleControls(cron, crons = []) {
+  const expressions = Array.isArray(crons) && crons.length ? crons : [cron];
+  const dailyMatches = expressions.map((expression) => String(expression || "").trim().toLowerCase().split(/\s+/));
+  const allDaily = dailyMatches.length > 0 && dailyMatches.every((parts) => parts.length === 5 && /^\d{1,2}$/.test(parts[0]) && Number(parts[0]) < 60 && /^\d{1,2}$/.test(parts[1]) && Number(parts[1]) < 24 && parts[2] === "*" && parts[3] === "*" && parts[4] === "*");
+  if (allDaily) {
+    renderScheduleDailyTimes(dailyMatches.map((parts) => scheduleTimeFromCron(parts[0], parts[1]).time).sort());
+    const selector = document.getElementById("scheduleFrequency");
+    selector.querySelector('option[value="current"]').hidden = true;
+    selector.value = "daily";
+    syncScheduleControls();
+    return;
+  }
   const normalized = String(cron || "").trim().toLowerCase().split(/\s+/);
   const [minute, hour, dayOfMonth, month, dayOfWeek] = normalized;
   const validTime = normalized.length === 5 && /^\d{1,2}$/.test(minute) && Number(minute) < 60 && /^\d{1,2}$/.test(hour) && Number(hour) < 24;
@@ -3816,12 +3854,14 @@ function loadScheduleControls(cron) {
     selector.value = frequency;
     const local = scheduleTimeFromCron(minute, hour, frequency === "weekly" ? dayOfWeek : "*");
     document.getElementById("scheduleTime").value = local.time;
+    renderScheduleDailyTimes([local.time]);
     if (frequency === "weekly") document.getElementById("scheduleWeekday").value = local.weekday;
     if (frequency === "monthly") document.getElementById("scheduleMonthDay").value = dayOfMonth;
   } else {
     customOption.hidden = false;
     selector.value = "current";
     document.getElementById("scheduleCron").value = cron || "0 2 * * *";
+    document.getElementById("scheduleCrons").value = JSON.stringify(expressions);
   }
   syncScheduleControls();
 }
@@ -3854,7 +3894,7 @@ async function openScheduleDialog() {
       ? servers.map((server) => `<label class="server-check-row"><input type="checkbox" value="${escapeHtml(server.id)}" ${selectedServers.has(server.id) ? "checked" : ""}> <span>${escapeHtml(server.name)} <small>SSH ${escapeHtml(maskedSshAddress(server))}</small></span></label>`).join("")
       : "No remote servers registered.";
 
-    loadScheduleControls(data.cron || "0 2 * * *");
+    loadScheduleControls(data.cron || "0 2 * * *", data.crons || []);
     document.getElementById("scheduleEnabled").value = data.enabled ? "true" : "false";
     document.getElementById("scheduleNextRun").textContent = data.next_run_time
       ? formatScheduleNextRun(data.next_run_time)
@@ -3904,12 +3944,15 @@ async function submitUpdateSchedule() {
   const cron = document.getElementById("scheduleCron").value.trim();
   const description = scheduleDescription();
   const enabled = document.getElementById("scheduleEnabled").value === "true";
+  const crons = JSON.parse(document.getElementById("scheduleCrons").value || "[]");
+  if (enabled && !crons.length) { showToast("Add at least one valid daily run time.", "warning"); return; }
   setBusy(btn, true, "Saving…");
   try {
     const data = await api("/api/v1/backups/schedule", {
       method: "POST",
       body: JSON.stringify({
         cron,
+        crons,
         enabled,
         format: "custom",
         db_id: document.getElementById("scheduleDbId").value || null,
@@ -4135,6 +4178,8 @@ function handleAction(action, el) {
     case "test-connection": testAddDbConnection(); break;
     case "submit-backup": submitCreateBackup(); break;
     case "submit-schedule": submitUpdateSchedule(); break;
+    case "add-schedule-time": addScheduleTime(); break;
+    case "remove-schedule-time": { const row = el.closest(".schedule-time-row"); if (row) row.remove(); syncScheduleControls(); break; }
     case "verify-backup": verifyBackupArchive(el.dataset.id); break;
     case "download-backup": downloadBackup(el.dataset.id); break;
     case "delete-backup": deleteBackup(el.dataset.id); break;
@@ -4224,7 +4269,7 @@ function registerEvents() {
     if (ev.target.matches("[data-autodetect]")) autoDetectEngine(ev.target.value);
     if (ev.target.id === "dbSearchInput") { state.filter = ev.target.value; renderDatabasePills(); }
     if (ev.target.id === "commandInput") buildCommandList(ev.target.value);
-    if (["scheduleTime", "scheduleDbId"].includes(ev.target.id)) syncScheduleControls();
+    if (["scheduleTime", "scheduleDbId"].includes(ev.target.id) || ev.target.matches(".schedule-daily-time")) syncScheduleControls();
     if (ev.target.id === "restoreNewDbName") updateRestorePlan();
   });
 
@@ -4245,7 +4290,7 @@ function registerEvents() {
     if (ev.target.id === "restoreSourceDbSelect") renderRestoreBackupOptions(ev.target.value, "");
     if (["restoreMode", "restoreSourceServer"].includes(ev.target.id)) toggleRestoreMode();
     if (ev.target.id === "restoreTargetDbId") updateRestorePlan();
-    if (["scheduleFrequency", "scheduleWeekday", "scheduleMonthDay", "scheduleDbId"].includes(ev.target.id)
+    if (["scheduleFrequency", "scheduleWeekday", "scheduleMonthDay", "scheduleDbId"].includes(ev.target.id) || ev.target.matches(".schedule-daily-time")
       || ev.target.matches("#scheduleRepositories input, #scheduleServers input")) syncScheduleControls();
     if (ev.target.id === "activityDbFilter") {
       state.activityDbFilter = ev.target.value || null;
