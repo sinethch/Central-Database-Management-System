@@ -2669,13 +2669,10 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
   const backup = (backupId && completed.find((b) => b.backup_id === backupId))
     || completed.find((b) => b.db_id === preferredSource)
     || completed[0];
-  if (!backup) {
-    showToast("No completed snapshot is available to restore. Take a snapshot first.", "warning");
-    return;
-  }
+  // File-based restores can be started even when no managed snapshot is available.
 
   const target = state.databases.find((d) => d.id === state.activeDatabaseId) || state.databases[0];
-  state.restoreBackupId = backup.backup_id;
+  state.restoreBackupId = backup?.backup_id || "";
   const pgTargets = state.databases.filter((db) => ["postgres", "postgresql"].includes(String(db.engine || "").toLowerCase()));
   const sourceDbSelect = document.getElementById("restoreSourceDbSelect");
   if (sourceDbSelect) {
@@ -2689,7 +2686,7 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
     const firstAvailableSource = sourceIds.find((id) => availableSourceIds.has(id));
     sourceDbSelect.value = preferredSource && availableSourceIds.has(preferredSource)
       ? preferredSource
-      : (availableSourceIds.has(backup.db_id) ? backup.db_id : firstAvailableSource || "");
+      : (backup && availableSourceIds.has(backup.db_id) ? backup.db_id : firstAvailableSource || "");
   }
 
   const backupSelect = document.getElementById("restoreBackupSelect");
@@ -2701,10 +2698,10 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
           return `<option value="${escapeHtml(item.backup_id)}">${escapeHtml(targetName)}${escapeHtml(item.backup_id)} · ${escapeHtml(item.filename)} (${escapeHtml(item.size_human)})</option>`;
         }).join("")
       : `<option value="" disabled>No completed snapshots are available</option>`;
-    backupSelect.value = backup.backup_id;
+    if (backup) backupSelect.value = backup.backup_id;
   }
-  updateRestoreBackupSelection(backup.backup_id);
-  renderRestoreBackupOptions(sourceDbSelect?.value || backup.db_id || "", backup.backup_id);
+  if (backup) updateRestoreBackupSelection(backup.backup_id);
+  renderRestoreBackupOptions(sourceDbSelect?.value || backup?.db_id || "", backup?.backup_id || "");
 
   const existingSelect = document.getElementById("restoreExistingDbId");
   if (existingSelect) {

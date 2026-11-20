@@ -3,7 +3,7 @@ import ipaddress
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import verify_api_key
@@ -12,6 +12,18 @@ from app.services.database_registry import database_registry
 from app.services.server_service import server_service
 
 router = APIRouter(prefix="/servers", tags=["Remote Database Servers"])
+
+
+@router.get("/{server_id}/snapshot-files", dependencies=[Depends(verify_api_key)])
+async def list_snapshot_files(server_id: str, path: str = Query(default="")):
+    try:
+        return await asyncio.to_thread(server_service.list_snapshot_files, server_id, path or None)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not browse remote snapshot directory: {exc}")
 
 
 @router.post("/host-key", dependencies=[Depends(verify_api_key)])

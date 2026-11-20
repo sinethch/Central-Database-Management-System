@@ -579,6 +579,58 @@ class ServerService:
         finally:
             client.close()
 
+    def list_snapshot_files(self, server_id: str, remote_path: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List regular files and directories beneath a registered snapshot root."""
+        row = self.get(server_id)
+        if not row:
+            raise FileNotFoundError("Remote snapshot server was not found.")
+        root = row["backup_root"]
+        requested = posixpath.normpath(remote_path or root)
+        if requested != root and not requested.startswith(root.rstrip("/") + "/"):
+            raise ValueError("Path is outside the registered snapshot directory.")
+        client = self.connect(row)
+        try:
+            sftp = client.open_sftp()
+            try:
+                entries = []
+                for item in sftp.listdir_attr(requested):
+                    if stat.S_ISLNK(item.st_mode):
+                        continue
+                    is_dir = stat.S_ISDIR(item.st_mode)
+                    if not is_dir and not stat.S_ISREG(item.st_mode):
+                        continue
+                    entries.append({"name": item.filename, "path": posixpath.join(requested, item.filename), "directory": is_dir, "size": item.st_size})
+                return {"path": requested, "parent": posixpath.dirname(requested) if requested != root else None, "root": root, "entries": sorted(entries, key=lambda entry: (not entry["directory"], entry["name"].lower()))}
+            finally:
+                sftp.close()
+        finally:
+            client.close()
+
+    def download_unverified_snapshot(self, server_id: str, remote_path: str, destination: Path) -> Path:
+        """Download a user-selected regular file confined beneath the snapshot root."""
+        row = self.get(server_id)
+        if not row:
+            raise FileNotFoundError("Remote snapshot server was not found.")
+        normalized = posixpath.normpath(remote_path)
+        if not normalized.startswith(row["backup_root"].rstrip("/") + "/"):
+            raise ValueError("Remote snapshot path is outside the registered snapshot directory.")
+        client = self.connect(row)
+        try:
+            sftp = client.open_sftp()
+            try:
+                item = sftp.lstat(normalized)
+                if not stat.S_ISREG(item.st_mode):
+                    raise ValueError("Selected path is not a regular file.")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with sftp.open(normalized, "rb") as source, destination.open("xb") as target:
+                    while block := source.read(1024 * 1024):
+                        target.write(block)
+                return destination
+            finally:
+                sftp.close()
+        finally:
+            client.close()
+
     @staticmethod
     def _check_remote_root(sftp, root: str, *, create: bool) -> None:
         """Check every configured path component without following symlinks."""
