@@ -235,6 +235,7 @@ class RestoreService:
             raise FileNotFoundError(f"Backup '{backup_id}' not found.")
         if record.status != "completed":
             raise ValueError(f"Backup '{backup_id}' is not in a restorable state (status: {record.status}).")
+        source_label = record.filename if record.description == "User-selected restore file" else backup_id
 
         remote_copy = None
         if source_server_id:
@@ -312,8 +313,8 @@ class RestoreService:
             await notification_service.notify(
                 "restore_started",
                 "Database Restore Started",
-                f"Restoring backup `{backup_id}` into *{target_database}* ({mode}).",
-                details={"restore_id": restore_id, "mode": mode, "target": target_database},
+                f"Restoring backup `{source_label}` into *{target_database}* ({mode}).",
+                details={"restore_id": restore_id, "mode": mode, "target": target_database, "backup_id": backup_id, "backup_filename": record.filename},
                 severity="WARNING",
             )
 
@@ -423,8 +424,8 @@ class RestoreService:
                 await notification_service.notify(
                     "restore_success",
                     "Database Restore Completed",
-                    f"Backup `{backup_id}` restored into *{target_database}* in {duration}s.",
-                    details={"restore_id": restore_id, "mode": mode, "target": target_database},
+                    f"Backup `{source_label}` restored into *{target_database}* in {duration}s.",
+                    details={"restore_id": restore_id, "mode": mode, "target": target_database, "backup_id": backup_id, "backup_filename": record.filename},
                     severity="SUCCESS",
                 )
             except Exception as e:
@@ -440,8 +441,8 @@ class RestoreService:
                 await notification_service.notify(
                     "restore_failure",
                     "Database Restore Failed",
-                    f"Restore of `{backup_id}` failed.\n\nError: {err_str}",
-                    details={"restore_id": restore_id, "target": target_database},
+                    f"Restore of `{source_label}` failed.\n\nError: {err_str}",
+                    details={"restore_id": restore_id, "target": target_database, "backup_id": backup_id, "backup_filename": record.filename},
                     severity="CRITICAL",
                 )
             finally:
