@@ -2661,11 +2661,6 @@ async function openRestoreDialog(backupId, preferredSourceDbId) {
   }
   const completed = state.restoreArchives.filter((b) => b.status === "completed");
   const preferredSource = preferredSourceDbId;
-  if (!backupId && preferredSource && !completed.some((item) => item.db_id === preferredSource)) {
-    const source = state.databases.find((item) => item.id === preferredSource);
-    showToast(`No completed snapshots are available for ${source?.name || "the selected database"}.`, "warning");
-    return;
-  }
   const backup = (backupId && completed.find((b) => b.backup_id === backupId))
     || completed.find((b) => b.db_id === preferredSource)
     || completed[0];
@@ -2789,6 +2784,21 @@ function updateRestoreBackupSelection(backupId) {
     sourceSelect.value = "";
   }
   toggleRestoreMode();
+}
+
+async function browseRestoreFiles(path = "") {
+  const serverId = document.getElementById("restoreBrowseServer")?.value;
+  if (!serverId) { showToast("Select a registered server first.", "warning"); return; }
+  const qs = path ? `?path=${encodeURIComponent(path)}` : "";
+  const data = await api(`/api/v1/servers/${encodeURIComponent(serverId)}/snapshot-files${qs}`);
+  const items = [];
+  items.push(`<span class="card-footnote">${escapeHtml(data.path)}</span>`);
+  if (data.parent) items.push(`<button type="button" class="btn btn-secondary btn-sm" data-action="browse-restore-path" data-path="${escapeHtml(data.parent)}">.. (parent folder)</button>`);
+  for (const entry of data.entries || []) {
+    if (entry.directory) items.push(`<button type="button" class="btn btn-secondary btn-sm" data-action="browse-restore-path" data-path="${escapeHtml(entry.path)}">📁 ${escapeHtml(entry.name)}</button>`);
+    else if (/\.(dump|backup|tar|sql|sql\.gz)$/i.test(entry.name)) items.push(`<button type="button" class="btn btn-secondary btn-sm" data-action="select-restore-path" data-path="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</button>`);
+  }
+  document.getElementById("restoreFileList").innerHTML = items.length ? items.join(" ") : "No supported dump files or folders here.";
 }
 
 function restoreDatabaseName(db) {
@@ -4119,6 +4129,9 @@ function handleAction(action, el) {
     case "open-restore": openRestoreDialog(el.dataset.id); break;
     case "open-restore-latest": openRestoreDialog(null); break;
     case "submit-restore": submitRestore(); break;
+    case "browse-restore-files": browseRestoreFiles().catch((err) => showToast(`Could not browse server: ${err.message}`, "error")); break;
+    case "browse-restore-path": browseRestoreFiles(el.dataset.path).catch((err) => showToast(`Could not browse server: ${err.message}`, "error")); break;
+    case "select-restore-path": document.getElementById("restoreBrowsePath").value = el.dataset.path; document.getElementById("restoreFileList").innerHTML = `Selected: ${escapeHtml(el.dataset.path)}`; document.getElementById("restoreLocalFile").value = ""; break;
     case "refresh-restores": fetchRestores(); break;
     case "refresh-migrations": fetchMigrationHistory(); break;
     case "restore-detail": showRestoreDetail(el.dataset.id); break;
@@ -4199,6 +4212,7 @@ function registerEvents() {
   });
 
   document.addEventListener("change", (ev) => {
+    if (ev.target.id === "restoreLocalFile" && ev.target.files?.length) { document.getElementById("restoreBrowsePath").value = ""; document.getElementById("restoreFileList").innerHTML = ""; }
     if (ev.target.matches(".target-section-select")) {
       if (ev.target.value && ev.target.value !== state.activeDatabaseId) selectDatabase(ev.target.value);
       return;

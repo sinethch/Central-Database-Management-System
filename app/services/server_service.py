@@ -579,7 +579,7 @@ class ServerService:
         finally:
             client.close()
 
-    def list_snapshot_files(self, server_id: str, remote_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_snapshot_files(self, server_id: str, remote_path: Optional[str] = None) -> Dict[str, Any]:
         """List regular files and directories beneath a registered snapshot root."""
         row = self.get(server_id)
         if not row:
@@ -592,6 +592,14 @@ class ServerService:
         try:
             sftp = client.open_sftp()
             try:
+                current = ""
+                for part in requested.split("/"):
+                    if not part:
+                        continue
+                    current += "/" + part
+                    item = sftp.lstat(current)
+                    if stat.S_ISLNK(item.st_mode):
+                        raise ValueError("Remote browser path cannot traverse symlinks.")
                 entries = []
                 for item in sftp.listdir_attr(requested):
                     if stat.S_ISLNK(item.st_mode):
@@ -618,6 +626,14 @@ class ServerService:
         try:
             sftp = client.open_sftp()
             try:
+                current = ""
+                for part in normalized.split("/")[:-1]:
+                    if not part:
+                        continue
+                    current += "/" + part
+                    parent = sftp.lstat(current)
+                    if stat.S_ISLNK(parent.st_mode):
+                        raise ValueError("Remote snapshot path cannot traverse symlinks.")
                 item = sftp.lstat(normalized)
                 if not stat.S_ISREG(item.st_mode):
                     raise ValueError("Selected path is not a regular file.")
