@@ -689,7 +689,7 @@
         <div class="dialog-icon tile-indigo" aria-hidden="true"><svg class="ico ico-lg"><use href="#i-database"/></svg></div>
         <div>
           <h3 id="addDbTitle" class="dialog-title">Add Any Database Target</h3>
-          <p class="dialog-subtitle">Paste a database URL and choose its engine. Connectivity is checked; read-only access depends on the account permissions you configure.</p>
+          <p class="dialog-subtitle">Paste a database URL and choose its engine. A failed connectivity check does not prevent registration; the target will be marked offline until the control plane can reach it. Read-only access depends on the account permissions you configure.</p>
         </div>
       </div>
 
@@ -702,7 +702,7 @@
       <div class="form-group">
         <label for="newDbUrl">Connection URL</label>
         <input type="text" id="newDbUrl" class="form-control mono" placeholder="postgresql://user:password@host:5432/dbname" autocomplete="off" data-autodetect>
-        <small class="field-hint">Supported: postgresql://, mongodb://, mongodb+srv://, mysql://, redis://</small>
+        <small class="field-hint">Supported: postgresql://, mongodb://, mongodb+srv://, mysql://, redis://. Docker service names work only when the control plane shares a Docker network with the database.</small>
         <small class="field-error" id="newDbUrlError" hidden></small>
       </div>
 

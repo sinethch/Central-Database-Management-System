@@ -89,6 +89,8 @@ flowchart LR
 
 Monitoring coverage varies by engine and permission level. Registration confirms connectivity; it does not prove that a database account is read-only. Snapshot and restore operations currently support PostgreSQL only. Restore can create a new database, or explicitly apply a snapshot to an existing target; the latter changes that database and requires confirmation.
 
+Database targets can still be registered when the connection check fails; they are saved as offline and can be monitored after connectivity is restored. The check runs from the DBOps control-plane process. For Docker service names such as `postgres`, connect the control-plane and database containers to a shared Docker network; a service name on another Compose network will not resolve. Otherwise, use a hostname or address reachable from the control plane.
+
 There is no generic safe way for DBOps to reverse a migration based only on its history row. Rollback needs the migration project's original code and its framework-specific down/undo logic; data deleted or overwritten by a migration may not be recoverable from that logic. Use the owning migration tool and review and test its rollback in a suitable environment. For shared or production databases, prefer a reviewed corrective migration or a verified backup restore plan. DBOps does not expose a one-click migration rollback.
 
 ## Quick start

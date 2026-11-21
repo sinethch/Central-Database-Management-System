@@ -265,6 +265,35 @@ def test_database_registry_endpoints():
     assert "secret123" not in db_data["connection_url"], "Password must be masked in API output"
 
 
+def test_database_registration_succeeds_when_connection_is_unavailable():
+    """Unreachable targets are registered and remain available for later connectivity checks."""
+    payload = {
+        "name": "Existing PostgreSQL",
+        "engine": "postgres",
+        "connection_url": "postgresql://monitor:secret@db-service:5432/application",
+        "verify_connectivity": True,
+    }
+    with patch.object(registry_module.database_registry, "verify_connection", new_callable=AsyncMock) as verify:
+        verify.return_value = {
+            "connected": False,
+            "latency_ms": None,
+            "version": None,
+            "error": "Temporary failure in name resolution",
+        }
+        response = client.post("/api/v1/databases", json=payload, headers=VALID_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == payload["name"]
+    assert data["status"] == "offline"
+    assert data["last_error"] == "Temporary failure in name resolution"
+    assert "secret" not in data["connection_url"]
+
+    listed = client.get("/api/v1/databases", headers=VALID_HEADERS)
+    assert listed.status_code == 200
+    assert any(database["id"] == data["id"] for database in listed.json()["databases"])
+
+
 def test_admin_can_rename_target_display_name_only(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "BACKUP_STORAGE_DIR", str(tmp_path))
     monkeypatch.setattr(registry_module, "DATABASES_FILE", tmp_path / "registered_databases.json")

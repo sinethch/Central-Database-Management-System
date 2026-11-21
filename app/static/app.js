@@ -1945,7 +1945,7 @@ async function testAddDbConnection() {
     if (data.connected) {
       showInlineStatus(`Connected — ${data.latency_ms} ms${data.version ? ` · ${data.version}` : ""}`, "ok");
     } else {
-      showInlineStatus(data.error || "Connection failed.", "err");
+      showInlineStatus(`${data.error || "Connection failed."} You can still add this target; it will be marked offline until reachable from the control plane.`, "err");
     }
   } catch (err) {
     showInlineStatus(err.message, "err");
@@ -1986,7 +1986,7 @@ async function submitRegisterDb() {
     });
     const offline = (data.status || "online") !== "online";
     showToast(
-      offline ? `Added “${data.name}” but it is unreachable — check URL/credentials.` : `Database “${data.name}” added successfully.`,
+      offline ? `Added “${data.name}” but it is unreachable from the control plane — check the hostname, network, and credentials.` : `Database “${data.name}” added successfully.`,
       offline ? "warning" : "success"
     );
     logActivity(offline ? "warning" : "add", offline ? "Added unreachable target" : "Registered database", `${data.name} · ${engineMeta(engine).label}`, data.id);
