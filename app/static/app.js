@@ -2554,8 +2554,9 @@ async function fetchRestores() {
 function renderRestoredDatabases() {
   const tbody = document.getElementById("restoredDatabasesBody");
   if (!tbody) return;
-  const restored = state.restores.filter((r) => r.status === "completed" && r.mode === "clone"
-    && r.restored_database_id && state.databases.some((db) => db.id === r.restored_database_id));
+  // Show every successful clone restore, including ones that have not yet been
+  // added to Targets. The restore history is the source of truth for the clone.
+  const restored = state.restores.filter((r) => r.status === "completed" && r.mode === "clone");
   const recordedDatabaseIds = new Set(restored.map((r) => r.restored_database_id).filter(Boolean));
   // Targets can outlive restore history (for example after metadata is reset).
   // Keep databases explicitly labeled as restored visible in this section too.
