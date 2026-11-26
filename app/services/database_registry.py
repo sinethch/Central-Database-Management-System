@@ -113,7 +113,7 @@ class DatabaseRegistryService:
             results.append(DatabaseInstance(**item))
         return results
 
-    async def add_database(self, name: str, engine: str, connection_url: str, verify: bool = True, server_id: Optional[str] = None, container_id: Optional[str] = None, read_only_verified: bool = False) -> DatabaseInstance:
+    async def add_database(self, name: str, engine: str, connection_url: str, verify: bool = True, server_id: Optional[str] = None, container_id: Optional[str] = None, read_only_verified: bool = False, access_scope: Optional[str] = None) -> DatabaseInstance:
         engine = engine.lower()
         if engine == "postgresql":
             engine = "postgres"
@@ -142,7 +142,20 @@ class DatabaseRegistryService:
         version = f"{engine.title()} Server"
         last_error: Optional[str] = None
         if verify:
-            result = await self.verify_connection(engine, connection_url)
+            if access_scope == "local" and server_id:
+                from app.services.ssh_db_tunnel import database_url_through_ssh
+                try:
+                    async with database_url_through_ssh({
+                        "connection_url": connection_url,
+                        "server_id": server_id,
+                        "container_id": container_id,
+                        "access_scope": access_scope,
+                    }) as reachable_url:
+                        result = await self.verify_connection(engine, reachable_url)
+                except Exception as exc:
+                    result = {"connected": False, "error": str(exc), "latency_ms": None, "version": None}
+            else:
+                result = await self.verify_connection(engine, connection_url)
             status = "online" if result.get("connected") else "offline"
             latency = result.get("latency_ms")
             version = result.get("version") or version
@@ -156,6 +169,7 @@ class DatabaseRegistryService:
             "read_only_verified": read_only_verified,
             "server_id": server_id,
             "container_id": container_id,
+            "access_scope": access_scope,
             "status": status,
             "latency_ms": latency,
             "version": version,
@@ -172,6 +186,29 @@ class DatabaseRegistryService:
         res_entry = dict(new_entry)
         res_entry["connection_url"] = mask_url(connection_url)
         return DatabaseInstance(**res_entry)
+
+    async def refresh_local_unreachable_targets(self) -> None:
+        """Retry legacy local-only targets through SSH so old offline labels can recover."""
+        from app.services.ssh_db_tunnel import database_url_through_ssh, is_local_database_target
+
+        records = self._load()
+        changed = False
+        for row in records:
+            if row.get("status") == "online" or not is_local_database_target(row):
+                continue
+            try:
+                async with database_url_through_ssh(row) as reachable_url:
+                    result = await self.verify_connection(row.get("engine", "postgres"), reachable_url)
+            except Exception as exc:
+                result = {"connected": False, "error": str(exc), "latency_ms": None, "version": None}
+            row["status"] = "online" if result.get("connected") else "offline"
+            row["latency_ms"] = result.get("latency_ms")
+            row["version"] = result.get("version") or row.get("version")
+            row["last_error"] = result.get("error")
+            row["last_checked_at"] = datetime.now(timezone.utc).isoformat()
+            changed = True
+        if changed:
+            self._save(records)
 
     def rename_database(self, db_id: str, name: str) -> DatabaseInstance:
         name = (name or "").strip()

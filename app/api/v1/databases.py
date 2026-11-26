@@ -59,6 +59,7 @@ async def list_registered_databases():
     List all databases monitored by the centralized DevOps control plane.
     Supports PostgreSQL, MongoDB, MySQL, and Redis.
     """
+    await database_registry.refresh_local_unreachable_targets()
     dbs = database_registry.list_databases()
     return {
         "total": len(dbs),

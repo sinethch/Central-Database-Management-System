@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 import asyncpg
 
 from app.services.multi_db_manager import multi_db_manager
+from app.services.ssh_db_tunnel import database_url_through_ssh
 
 
 MIGRATION_SOURCES = [
@@ -68,8 +69,12 @@ class MigrationHistoryService:
                 "message": "Migration history discovery currently supports PostgreSQL targets only.",
             }
 
+        async with database_url_through_ssh(target) as connection_url:
+            return await self._read_history(connection_url)
+
+    async def _read_history(self, connection_url: str) -> Dict[str, Any]:
         conn = await asyncpg.connect(
-            dsn=target.get("connection_url", ""), timeout=5,
+            dsn=connection_url, timeout=10,
             server_settings={"default_transaction_read_only": "on", "statement_timeout": "5000"},
         )
         found: List[str] = []

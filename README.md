@@ -193,7 +193,9 @@ The versioned API is rooted at `/api/v1`. Protected endpoints accept an authenti
 | Storage and remote servers | `/storage/targets`, `/servers` |
 | Actions | `POST /actions/ping`, `POST /actions/kill-query` |
 
-Remote server provisioning creates a new isolated container and data directory for PostgreSQL, MongoDB, MySQL/MariaDB, or Redis. Choose whether to publish it on the registered server address or on `127.0.0.1` only. The local-only connection URL points to loopback and can be used from the server host; a containerized DBOps control plane cannot reach that URL unless it shares the host network namespace. Before creation, DBOps checks the selected host port against Docker-published ports and host TCP listeners, then checks again immediately before starting the container. This is a point-in-time check; another process could bind the port afterward, so Docker's final bind remains authoritative. Existing containers are not stopped or reconfigured by this workflow.
+Remote server provisioning creates a new isolated container and data directory for PostgreSQL, MongoDB, MySQL/MariaDB, or Redis. Choose whether to publish it on the registered server address or on `127.0.0.1` only. Local-only URLs use loopback and DBOps reaches them through a short-lived SSH port-forward over the registered server connection. Before creation, DBOps checks the selected host port against Docker-published ports and host TCP listeners, then checks again immediately before starting the container. This is a point-in-time check; another process could bind the port afterward, so Docker's final bind remains authoritative. Existing containers are not stopped or reconfigured by this workflow.
+
+For local-only database targets, DBOps opens a short-lived SSH port-forward over the registered server connection for PostgreSQL connectivity checks, health, metrics, diagnostics, and migration-history reads. Forward listeners bind only to the DBOps process's loopback interface and close after each operation. Migration history is read-only; this feature discovers existing migration ledger entries and does not execute migration scripts.
 
 ## Project layout
 

@@ -176,6 +176,7 @@ async def create_database_container(server_id: str, engine: str, payload: Contai
             registered = await database_registry.add_database(
                 name=payload.name, engine=engine, connection_url=connection_url, verify=True,
                 server_id=server_id, container_id=created["container_name"], read_only_verified=False,
+                access_scope=payload.access_scope,
             )
         except Exception:
             # Container remains isolated under its new name and data path; never remove it automatically.
@@ -256,6 +257,7 @@ async def create_database_container_stream(server_id: str, engine: str, payload:
             registered = await database_registry.add_database(
                 name=payload.name, engine=engine, connection_url=connection_url, verify=True,
                 server_id=server_id, container_id=created["container_name"], read_only_verified=False,
+                access_scope=payload.access_scope,
             )
             result = {
                 "database_id": registered.id, "server_id": server_id,

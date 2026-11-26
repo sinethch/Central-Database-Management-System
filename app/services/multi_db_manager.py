@@ -12,6 +12,7 @@ import pymongo
 
 from app.config import settings
 from app.services.backup_service import _human_size
+from app.services.ssh_db_tunnel import database_url_through_ssh
 
 logger = logging.getLogger("dbops.multidb")
 
@@ -20,17 +21,18 @@ class MultiDatabaseManager:
     def __init__(self):
         self._pg_pools: Dict[str, asyncpg.Pool] = {}
 
-    async def _with_postgres(self, url: str, operation, *args, **kwargs):
+    async def _with_postgres(self, target: Dict[str, Any], operation, *args, **kwargs):
         """Run a read-only metrics operation against the selected PostgreSQL URL."""
-        conn = await asyncpg.connect(
-            dsn=url,
-            timeout=6,
-            server_settings={"default_transaction_read_only": "on", "statement_timeout": "15000"},
-        )
-        try:
-            return await operation(*args, conn=conn, **kwargs)
-        finally:
-            await conn.close()
+        async with database_url_through_ssh(target) as url:
+            conn = await asyncpg.connect(
+                dsn=url,
+                timeout=10,
+                server_settings={"default_transaction_read_only": "on", "statement_timeout": "15000"},
+            )
+            try:
+                return await operation(*args, conn=conn, **kwargs)
+            finally:
+                await conn.close()
 
     def get_database_info(self, db_id: str) -> Optional[Dict[str, Any]]:
         from app.services.database_registry import database_registry
@@ -82,7 +84,8 @@ class MultiDatabaseManager:
         start = time.perf_counter()
         try:
             if engine in ["postgres", "postgresql"]:
-                return await self._get_health_postgres(url)
+                async with database_url_through_ssh(target) as reachable_url:
+                    return await self._get_health_postgres(reachable_url)
             elif engine == "mongodb":
                 return self._get_health_mongodb(url, start)
             elif engine in ["mysql", "mariadb"]:
@@ -218,7 +221,7 @@ class MultiDatabaseManager:
 
         if engine in ["postgres", "postgresql"]:
             from app.services.metrics_service import metrics_service
-            return await self._with_postgres(url, metrics_service.get_connections)
+            return await self._with_postgres(target, metrics_service.get_connections)
 
         elif engine == "mongodb":
             try:
@@ -310,7 +313,7 @@ class MultiDatabaseManager:
 
         if engine in ["postgres", "postgresql"]:
             from app.services.metrics_service import metrics_service
-            return await self._with_postgres(url, metrics_service.get_database_size)
+            return await self._with_postgres(target, metrics_service.get_database_size)
 
         elif engine == "mongodb":
             try:
@@ -457,7 +460,7 @@ class MultiDatabaseManager:
 
         if engine in ["postgres", "postgresql"]:
             from app.services.metrics_service import metrics_service
-            return await self._with_postgres(url, metrics_service.get_cache_hit_ratio)
+            return await self._with_postgres(target, metrics_service.get_cache_hit_ratio)
 
         raise NotImplementedError(f"Buffer cache hit metrics are only available for PostgreSQL targets (selected: '{engine}').")
 
@@ -471,7 +474,7 @@ class MultiDatabaseManager:
 
         if engine in ["postgres", "postgresql"]:
             from app.services.metrics_service import metrics_service
-            return await self._with_postgres(url, metrics_service.get_slow_queries, threshold_seconds=threshold_seconds)
+            return await self._with_postgres(target, metrics_service.get_slow_queries, threshold_seconds=threshold_seconds)
 
         elif engine == "mongodb":
             try:
@@ -507,7 +510,7 @@ class MultiDatabaseManager:
 
         if engine in ["postgres", "postgresql"]:
             from app.services.metrics_service import metrics_service
-            return await self._with_postgres(url, metrics_service.get_deadlocks)
+            return await self._with_postgres(target, metrics_service.get_deadlocks)
 
         raise NotImplementedError(f"Deadlock statistics are not supported for '{engine}'.")
 
@@ -517,7 +520,7 @@ class MultiDatabaseManager:
         if engine not in {"postgres", "postgresql"}:
             raise NotImplementedError(f"Lock diagnostics are not supported for '{engine}'.")
         from app.services.diagnostics_service import diagnostics_service
-        return await self._with_postgres(target.get("connection_url", ""), diagnostics_service.get_waiting_locks)
+        return await self._with_postgres(target, diagnostics_service.get_waiting_locks)
 
     async def get_table_bloat(self, db_id: Optional[str] = None) -> Dict[str, Any]:
         target = self._require_target(db_id)
@@ -525,7 +528,7 @@ class MultiDatabaseManager:
         if engine not in {"postgres", "postgresql"}:
             raise NotImplementedError(f"Table bloat diagnostics are not supported for '{engine}'.")
         from app.services.diagnostics_service import diagnostics_service
-        return await self._with_postgres(target.get("connection_url", ""), diagnostics_service.get_table_bloat)
+        return await self._with_postgres(target, diagnostics_service.get_table_bloat)
 
     # =========================================================================
     # 6. Actions: Kill Query / Operation
@@ -538,7 +541,7 @@ class MultiDatabaseManager:
         if engine in ["postgres", "postgresql"]:
             async def terminate(conn):
                 return await conn.fetchval("SELECT pg_terminate_backend($1);", pid)
-            success = await self._with_postgres(url, terminate)
+            success = await self._with_postgres(target, terminate)
             return {
                 "success": bool(success),
                 "pid": pid,
