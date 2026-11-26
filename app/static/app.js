@@ -3495,7 +3495,7 @@ function openProvisionDbDialog(serverId) {
   const server = state.remoteServers.find((item) => item.id === serverId);
   if (!server) return;
   state.provisionServerId = serverId;
-  document.getElementById("provisionAccessScope").value = "shared";
+  document.getElementById("provisionAccessScope").value = "local";
   provisionPortCheckToken += 1;
   clearTimeout(provisionPortCheckTimer);
   setProvisionNotice("", "info");

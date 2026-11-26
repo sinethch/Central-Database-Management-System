@@ -72,7 +72,7 @@ class ContainerCreateRequest(BaseModel):
     database_user: str = Field(default="dbops", min_length=1, max_length=63, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     database_password: str = Field(..., min_length=16, max_length=128)
     host_port: int = Field(default=5432, ge=1024, le=65535)
-    access_scope: Literal["shared", "local"] = Field(default="shared", description="Publish on the server address or loopback only")
+    access_scope: Literal["shared", "local"] = Field(default="local", description="Publish on the server address or loopback only")
     image: Optional[str] = Field(default=None, max_length=160, pattern=r"^[A-Za-z0-9._/:@-]+$")
 
 

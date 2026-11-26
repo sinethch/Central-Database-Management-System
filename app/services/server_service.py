@@ -338,7 +338,7 @@ class ServerService:
         finally:
             client.close()
 
-    def create_database_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: Optional[str], progress: Optional[Callable[[str], None]] = None, engine: str = "postgres", access_scope: str = "shared") -> Dict[str, Any]:
+    def create_database_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: Optional[str], progress: Optional[Callable[[str], None]] = None, engine: str = "postgres", access_scope: str = "local") -> Dict[str, Any]:
         """Provision an isolated database container with fresh data and a protected password file."""
         configs = {
             "postgres": (image or "postgres:16-alpine", "/var/lib/postgresql/data", "postgres_password", 5432),
