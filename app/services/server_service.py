@@ -338,7 +338,7 @@ class ServerService:
         finally:
             client.close()
 
-    def create_database_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: Optional[str], progress: Optional[Callable[[str], None]] = None, engine: str = "postgres") -> Dict[str, Any]:
+    def create_database_container(self, server_id: str, *, name: str, container_name: str, database_name: str, database_user: str, database_password: str, host_port: int, image: Optional[str], progress: Optional[Callable[[str], None]] = None, engine: str = "postgres", access_scope: str = "shared") -> Dict[str, Any]:
         """Provision an isolated database container with fresh data and a protected password file."""
         configs = {
             "postgres": (image or "postgres:16-alpine", "/var/lib/postgresql/data", "postgres_password", 5432),
@@ -355,6 +355,8 @@ class ServerService:
         import re
         if engine not in configs:
             raise ValueError("Choose PostgreSQL, MongoDB, MySQL/MariaDB, or Redis.")
+        if access_scope not in {"shared", "local"}:
+            raise ValueError("Choose shared server access or local-only access.")
         image, target_dir, secret_name, internal_port = configs[engine]
         if not re.fullmatch(patterns[engine], image):
             raise ValueError(f"Unsupported {engine} image tag: {image}")
@@ -364,7 +366,7 @@ class ServerService:
         client = self.connect(row)
         data_dir = posixpath.join(row["database_root"], container_name)
         secret_file = posixpath.join(row["database_root"], ".secrets", container_name, secret_name)
-        bind_host = f"[{row['host']}]" if ":" in row["host"] else row["host"]
+        bind_host = "127.0.0.1" if access_scope == "local" else (f"[{row['host']}]" if ":" in row["host"] else row["host"])
         report = progress or (lambda _message: None)
         try:
             report(f"Connecting to {row['host']} over SSH")

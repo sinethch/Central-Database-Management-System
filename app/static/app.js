@@ -3495,6 +3495,7 @@ function openProvisionDbDialog(serverId) {
   const server = state.remoteServers.find((item) => item.id === serverId);
   if (!server) return;
   state.provisionServerId = serverId;
+  document.getElementById("provisionAccessScope").value = "shared";
   provisionPortCheckToken += 1;
   clearTimeout(provisionPortCheckTimer);
   setProvisionNotice("", "info");
@@ -3523,6 +3524,7 @@ function openProvisionDbDialog(serverId) {
   });
   portInput.onchange = checkProvisionPort;
   portInput.onblur = checkProvisionPort;
+  document.getElementById("provisionAccessScope").onchange = updateProvisionUrlFormat;
   updateEngine();
   updateProvisionUrlFormat();
   document.getElementById("provisionServerLabel").textContent = `${server.name} (${maskedSshAddress(server)}) · creates a new container and data directory only`;
@@ -3532,7 +3534,10 @@ function openProvisionDbDialog(serverId) {
 function updateProvisionUrlFormat() {
   const engine = document.getElementById("provisionEngine").value;
   const server = state.remoteServers.find((item) => item.id === state.provisionServerId);
-  const host = "SERVER_HOST";
+  let host = document.getElementById("provisionAccessScope").value === "local"
+    ? "127.0.0.1"
+    : (server?.host || "SERVER_HOST");
+  if (host.includes(":") && !host.startsWith("[") && host !== "SERVER_HOST") host = `[${host}]`;
   const port = document.getElementById("provisionPort").value || "PORT";
   const database = encodeURIComponent(document.getElementById("provisionDbName").value.trim() || "DATABASE");
   const user = encodeURIComponent(document.getElementById("provisionDbUser").value.trim() || "USER");
@@ -3632,6 +3637,7 @@ async function provisionPostgresContainer() {
       method: "POST", headers: getHeaders(), body: JSON.stringify({
       server_id: state.provisionServerId, engine, name, container_name: containerName, database_name: databaseName, database_user: databaseUser,
       database_password: databasePassword, host_port: hostPort, image,
+      access_scope: document.getElementById("provisionAccessScope").value,
       }),
     });
     if (!response.ok) {

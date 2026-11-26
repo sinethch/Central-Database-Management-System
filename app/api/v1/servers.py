@@ -156,9 +156,10 @@ async def create_database_container(server_id: str, engine: str, payload: Contai
             container_name=payload.container_name,
             database_name=payload.database_name, database_user=payload.database_user,
             database_password=payload.database_password, host_port=payload.host_port, image=payload.image, engine=engine,
+            access_scope=payload.access_scope,
         )
         try:
-            host = server["host"]
+            host = "127.0.0.1" if payload.access_scope == "local" else server["host"]
             try:
                 ip = ipaddress.ip_address(host)
                 if ip.version == 6:
@@ -223,6 +224,7 @@ async def create_database_container_stream(server_id: str, engine: str, payload:
                 name=payload.name, container_name=payload.container_name, database_name=payload.database_name,
                 database_user=payload.database_user, database_password=payload.database_password,
                 host_port=payload.host_port, image=payload.image, progress=report, engine=engine,
+                access_scope=payload.access_scope,
             )
 
         task = asyncio.create_task(provision())
@@ -237,7 +239,7 @@ async def create_database_container_stream(server_id: str, engine: str, payload:
         try:
             created = task.result()
             yield f"data: {json.dumps({'type': 'progress', 'message': 'Registering the new database with DBOps'})}\n\n"
-            host = server["host"]
+            host = "127.0.0.1" if payload.access_scope == "local" else server["host"]
             try:
                 ip = ipaddress.ip_address(host)
                 if ip.version == 6:
