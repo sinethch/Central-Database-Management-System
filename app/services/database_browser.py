@@ -11,6 +11,7 @@ import pymysql
 import redis
 
 from app.services.database_registry import database_registry
+from app.services.ssh_db_tunnel import database_url_through_ssh
 
 
 class DatabaseBrowser:
@@ -44,15 +45,16 @@ class DatabaseBrowser:
         target = self._target(db_id)
         engine, url = self._engine(target), target.get("connection_url", "")
         if engine == "postgres":
-            conn = await asyncpg.connect(dsn=url, timeout=6, server_settings={"default_transaction_read_only": "on", "statement_timeout": "15000"})
-            try:
-                rows = await conn.fetch("""SELECT table_schema AS schema, table_name AS name
-                    FROM information_schema.tables WHERE table_type = 'BASE TABLE'
-                    AND table_schema NOT IN ('pg_catalog', 'information_schema')
-                    ORDER BY table_schema, table_name LIMIT $1""", self.TABLE_MAX)
-                return {"engine": engine, "tables": [dict(row) for row in rows], "truncated": len(rows) == self.TABLE_MAX}
-            finally:
-                await conn.close()
+            async with database_url_through_ssh(target) as reachable_url:
+                conn = await asyncpg.connect(dsn=reachable_url, timeout=6, server_settings={"default_transaction_read_only": "on", "statement_timeout": "15000"})
+                try:
+                    rows = await conn.fetch("""SELECT table_schema AS schema, table_name AS name
+                        FROM information_schema.tables WHERE table_type = 'BASE TABLE'
+                        AND table_schema NOT IN ('pg_catalog', 'information_schema')
+                        ORDER BY table_schema, table_name LIMIT $1""", self.TABLE_MAX)
+                    return {"engine": engine, "tables": [dict(row) for row in rows], "truncated": len(rows) == self.TABLE_MAX}
+                finally:
+                    await conn.close()
         if engine in ("mysql", "mariadb"):
             parsed = urlparse(url)
             conn = pymysql.connect(host=parsed.hostname or "localhost", port=parsed.port or 3306, user=parsed.username or "root", password=parsed.password or "", database=parsed.path.lstrip("/") or None, connect_timeout=5, read_timeout=10, write_timeout=10, autocommit=False)
@@ -82,23 +84,24 @@ class DatabaseBrowser:
         engine, url = self._engine(target), target.get("connection_url", "")
         limit = min(limit, self.PAGE_MAX)
         if engine == "postgres":
-            conn = await asyncpg.connect(dsn=url, timeout=6, server_settings={"default_transaction_read_only": "on", "statement_timeout": "15000"})
-            try:
-                async with conn.transaction(readonly=True):
-                    exists = await conn.fetchval("""SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema=$1 AND table_name=$2 AND table_schema NOT IN ('pg_catalog','information_schema'))""", *self._split_table(table))
-                    if not exists:
-                        raise ValueError("Choose a table from the registered table list.")
-                    schema, name = self._split_table(table)
-                    quoted = f'"{schema.replace(chr(34), chr(34)*2)}"."{name.replace(chr(34), chr(34)*2)}"'
-                    rows = await conn.fetch(f"SELECT * FROM {quoted} LIMIT $1 OFFSET $2", limit, offset)
-                    columns = await self._postgres_columns(conn, schema, name)
-                    result_rows = [
-                        {column: self._json_value(row[index]) for index, column in enumerate(columns)}
-                        for row in rows
-                    ]
-                    return {"columns": columns, "rows": result_rows, "limit": limit, "offset": offset, "has_more": len(rows) == limit}
-            finally:
-                await conn.close()
+            async with database_url_through_ssh(target) as reachable_url:
+                conn = await asyncpg.connect(dsn=reachable_url, timeout=6, server_settings={"default_transaction_read_only": "on", "statement_timeout": "15000"})
+                try:
+                    async with conn.transaction(readonly=True):
+                        exists = await conn.fetchval("""SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema=$1 AND table_name=$2 AND table_schema NOT IN ('pg_catalog','information_schema'))""", *self._split_table(table))
+                        if not exists:
+                            raise ValueError("Choose a table from the registered table list.")
+                        schema, name = self._split_table(table)
+                        quoted = f'"{schema.replace(chr(34), chr(34)*2)}"."{name.replace(chr(34), chr(34)*2)}"'
+                        rows = await conn.fetch(f"SELECT * FROM {quoted} LIMIT $1 OFFSET $2", limit, offset)
+                        columns = await self._postgres_columns(conn, schema, name)
+                        result_rows = [
+                            {column: self._json_value(row[index]) for index, column in enumerate(columns)}
+                            for row in rows
+                        ]
+                        return {"columns": columns, "rows": result_rows, "limit": limit, "offset": offset, "has_more": len(rows) == limit}
+                finally:
+                    await conn.close()
         if engine in ("mysql", "mariadb"):
             parsed = urlparse(url)
             default_schema = parsed.path.lstrip("/")
