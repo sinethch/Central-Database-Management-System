@@ -17,6 +17,7 @@ from app.models.restore import RestoreJob
 from app.services.backup_service import backup_service
 from app.services.notification_service import notification_service
 from app.services.storage_service import storage_service
+from app.services.ssh_db_tunnel import database_url_through_ssh
 
 logger = logging.getLogger("dbops.restore")
 
@@ -321,7 +322,17 @@ class RestoreService:
             start = time.perf_counter()
             work_file = file_path
             temp_files: List[Path] = []
+            tunnel_context = None
+            tunnel_entered = False
             try:
+                # Local-only server URLs use loopback on the SSH host. The control
+                # plane may run in Docker, where that same loopback is the container.
+                # Forward the database port through SSH for all restore operations.
+                tunnel_context = database_url_through_ssh(target)
+                target_url = await tunnel_context.__aenter__()
+                tunnel_entered = True
+                if mode == "existing":
+                    restore_url = target_url
                 if source_server_id:
                     from app.services.server_service import server_service
                     remote_stage = settings.get_backup_path() / f"remote_source_{restore_id}_{record.filename}"
@@ -446,6 +457,8 @@ class RestoreService:
                     severity="CRITICAL",
                 )
             finally:
+                if tunnel_entered:
+                    await tunnel_context.__aexit__(None, None, None)
                 for tmp in temp_files:
                     try:
                         tmp.unlink(missing_ok=True)
